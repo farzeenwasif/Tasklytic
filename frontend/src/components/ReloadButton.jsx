@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { TaskContext } from "../context/BillContext";
 
 export default function ReloadButton() {
+  const { refreshTasks } = useContext(TaskContext);
   const [rotating, setRotating] = useState(false);
 
-  const handleReload = () => {
+  // Re-fetch the user's tasks from the server instead of reloading the whole page
+  const handleReload = async () => {
+    if (rotating) return;
     setRotating(true);
-
-    // Simulate reload logic (replace with your API call, page reload, etc.)
-    setTimeout(() => {
+    try {
+      await refreshTasks();
+    } finally {
       setRotating(false);
-      window.location.reload(); // reloads the page
-    }, 800);
+    }
   };
 
   return (
@@ -22,9 +25,7 @@ export default function ReloadButton() {
     >
       <RefreshCw
         size={14}
-        className={`text-white transition-transform duration-500 ${
-          rotating ? "animate-spin" : ""
-        }`}
+        className={`text-white transition-transform duration-500 ${rotating ? "animate-spin" : ""}`}
       />
     </button>
   );

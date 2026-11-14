@@ -7,11 +7,11 @@ const AmountCard = () => {
   const stats = getTaskStats();
 
   // Calculate hours progress
-  const totalEstimatedHours = tasks.reduce((sum, t) => sum + t.estimatedHours, 0);
+  const totalEstimatedHours = tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
   const hoursCompleted = stats.totalHoursLogged;
   const hoursRemaining = Math.max(0, totalEstimatedHours - hoursCompleted);
   
-  const percent = totalEstimatedHours > 0 ? Math.round((hoursCompleted / totalEstimatedHours) * 100) : 0;
+  const percent = totalEstimatedHours > 0 ? Math.min(100, Math.round((hoursCompleted / totalEstimatedHours) * 100)) : 0;
   const radius = 65;
   const centerX = 80;
   const centerY = 110;
@@ -33,7 +33,7 @@ const AmountCard = () => {
 
   return (
     <div
-      className="card-gradient-cyan rounded-2xl mb-5 sm:mb-0 sm:w-[320px] min-w-[240px] h-[335px] shadow-lg p-5 relative overflow-hidden flex flex-col justify-start"
+      className="card-gradient-cyan rounded-2xl w-full max-w-[360px] lg:w-[320px] shrink-0 h-[335px] shadow-lg backdrop-blur-sm p-5 relative overflow-hidden flex flex-col justify-start"
     >
       {/* Dots menu */}
       <div className="absolute top-4 right-4">
@@ -50,14 +50,14 @@ const AmountCard = () => {
           <path
             d={`M${arcStartX},${arcStartY} A${radius},${radius} 0 0,1 ${arcEndX},${arcEndY}`}
             fill="none"
-            stroke="#B9B921"
+            stroke="#ffffff2e"
             strokeWidth="30"
           />
           {/* Progress */}
           <path
             d={`M${arcStartX},${arcStartY} A${radius},${radius} 0 0,1 ${arcEndX},${arcEndY}`}
             fill="none"
-            stroke="#9CCA3F"
+            stroke="#34D399"
             strokeWidth="30"
             strokeDasharray={circumference}
             strokeDashoffset={circumference - progress}

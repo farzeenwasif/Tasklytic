@@ -1,8 +1,13 @@
 import React, { useState, useContext, useMemo } from "react";
 import { TaskContext } from "../context/BillContext";
 
-const BAR_COLORS = ["#b6d13a", "#b6d13a", "#b6d13a", "#b6d13a", "#b6d13a", "#b6d13a"];
-const HIGHLIGHT_COLOR = "#a2d13a";
+const BAR_COLORS = ["#10B981", "#10B981", "#10B981", "#10B981", "#10B981", "#10B981"];
+const HIGHLIGHT_COLOR = "#34D399";
+// Months with no hours still show a small faded stub so the chart never looks empty
+const ZERO_BAR_HEIGHT = 10;
+// The chart's full height is at least this many hours (about one work week), so a
+// single small task doesn't fill the whole chart. Busier months raise the scale.
+const MIN_SCALE_HOURS = 40;
 
 const Chart = () => {
   const { tasks } = useContext(TaskContext);
@@ -51,25 +56,34 @@ const Chart = () => {
     });
   }, [tasks, monthlyData]);
 
-  const width = 500;
+  const width = 430;
   const height = 320;
   const chartBottom = 270;
   const barHeightMax = 220;
   const barWidth = 44;
   const gap = 24;
-  const maxValue = Math.max(...data.map((d) => d.value), 1);
+  const maxValue = Math.max(...data.map((d) => d.value), 0);
+  // round the top of the scale up to the next 20h step
+  const scaleMax = Math.max(MIN_SCALE_HOURS, Math.ceil(maxValue / 20) * 20);
+  const heightFor = (value) =>
+    value > 0 ? Math.max((value / scaleMax) * barHeightMax, 14) : ZERO_BAR_HEIGHT;
 
   return (
-    <div className="w-full ml-2 sm:ml-20 max-w-[500px] flex items-end relative">
+    <div className="w-full h-[335px] glass-card rounded-2xl p-5 flex flex-col">
+      <div className="flex items-center justify-between shrink-0">
+        <h3 className="text-white font-bold">Hours by month</h3>
+        <span className="text-xs text-gray-400">by due date</span>
+      </div>
+      <div className="flex-1 min-h-0">
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
-        height={height}
-        preserveAspectRatio="xMidYMid meet"
-        className="block"
+        height="100%"
+        preserveAspectRatio="xMidYMax meet"
+        className="block overflow-visible"
       >
         {data.map((d, i) => {
-          const barHeight = (d.value / maxValue) * barHeightMax;
+          const barHeight = heightFor(d.value);
           const x = i * (barWidth + gap) + 10;
           const y = chartBottom - barHeight;
           const isHovered = hovered === i;
@@ -81,11 +95,12 @@ const Chart = () => {
                 y={y}
                 width={barWidth}
                 height={barHeight}
+                fillOpacity={d.value > 0 ? 1 : 0.3}
                 rx={8}
                 fill={isHovered ? HIGHLIGHT_COLOR : BAR_COLORS[i % BAR_COLORS.length]}
                 style={{
                   filter: isHovered
-                    ? "drop-shadow(0 2px 12px #b6d13a88)"
+                    ? "drop-shadow(0 2px 12px #10B98188)"
                     : "drop-shadow(0 2px 8px #0006)",
                   cursor: "pointer",
                   transition: "fill 0.2s, filter 0.2s",
@@ -93,6 +108,21 @@ const Chart = () => {
                 onMouseEnter={() => setHovered(i)}
                 onMouseLeave={() => setHovered(null)}
               />
+
+              {/* hours on top of the bar (the hover tooltip replaces it) */}
+              {d.value > 0 && !isHovered && (
+                <text
+                  x={x + barWidth / 2}
+                  y={y - 8}
+                  textAnchor="middle"
+                  fill="#e5e5e5"
+                  fontSize="14"
+                  fontWeight="600"
+                  style={{ pointerEvents: "none" }}
+                >
+                  {Math.round(d.value * 10) / 10}h
+                </text>
+              )}
 
               <text
                 x={x + barWidth / 2}
@@ -112,7 +142,7 @@ const Chart = () => {
         {hovered !== null && (() => {
           const i = hovered;
           const d = data[i];
-          const barHeight = (d.value / maxValue) * barHeightMax;
+          const barHeight = heightFor(d.value);
           const x = i * (barWidth + gap) + 10;
           const y = chartBottom - barHeight;
 
@@ -153,6 +183,7 @@ const Chart = () => {
           );
         })()}
       </svg>
+      </div>
     </div>
   );
 };

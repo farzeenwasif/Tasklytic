@@ -10,7 +10,8 @@ export default function TasksList() {
   const {
     tasks,
     selectedTasks,
-    addTask,
+    loading,
+    error,
     updateTask,
     deleteTask,
     bulkDeleteTasks,
@@ -24,6 +25,7 @@ export default function TasksList() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [actionError, setActionError] = useState('');
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -66,11 +68,8 @@ export default function TasksList() {
     setIsEditModalOpen(true);
   };
 
-  const handleUpdateTask = (taskData) => {
-    updateTask(selectedTask.id, taskData);
-    setIsEditModalOpen(false);
-    setSelectedTask(null);
-  };
+  // Throws on API error so the edit modal can show it; the modal closes itself on success
+  const handleUpdateTask = (taskData) => updateTask(selectedTask.id, taskData);
 
   const handleViewClick = (task) => {
     setSelectedTask(task);
@@ -82,29 +81,35 @@ export default function TasksList() {
     setIsDeleteModalOpen(true);
   };
 
-  const handleConfirmDelete = () => {
-    if (selectedTask) {
-      deleteTask(selectedTask.id);
-      setSelectedTask(null);
+  const handleConfirmDelete = async () => {
+    if (!selectedTask) return;
+    const id = selectedTask.id;
+    setSelectedTask(null);
+    setActionError('');
+    try {
+      await deleteTask(id);
+    } catch (err) {
+      setActionError(err.response?.data?.message || 'Failed to delete task');
     }
   };
 
   const handleBulkDelete = () => {
-    const totalHours = tasks
-      .filter(task => selectedTasks.includes(task.id))
-      .reduce((sum, task) => sum + task.hoursLogged, 0);
-    
     setIsDeleteModalOpen(false);
     setIsBulkDeleteModalOpen(true);
   };
 
-  const handleConfirmBulkDelete = () => {
-    bulkDeleteTasks(selectedTasks);
+  const handleConfirmBulkDelete = async () => {
+    setActionError('');
+    try {
+      await bulkDeleteTasks(selectedTasks);
+    } catch (err) {
+      setActionError(err.response?.data?.message || 'Failed to delete tasks');
+    }
   };
 
   const getSelectedTasksData = () => {
     const selected = tasks.filter(task => selectedTasks.includes(task.id));
-    const totalHours = selected.reduce((sum, task) => sum + task.hoursLogged, 0);
+    const totalHours = selected.reduce((sum, task) => sum + (Number(task.hoursLogged) || 0), 0);
     return { selected, totalHours };
   };
 
@@ -116,7 +121,7 @@ export default function TasksList() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
           <h3 className="text-xl font-bold text-white">Tasks List</h3>
-          <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm border border-blue-500/50">
+          <span className="px-3 py-1 bg-white/10 text-gray-200 rounded-full text-sm border border-white/10">
             {tasks.length} tasks
           </span>
         </div>
@@ -136,7 +141,7 @@ export default function TasksList() {
               </button>
               <button
                 onClick={clearSelection}
-                className="px-3 py-1 bg-gray-600/20 hover:bg-gray-600/30 text-gray-300 border border-gray-500/50 rounded-lg text-sm transition-colors"
+                className="px-3 py-1 bg-white/10 hover:bg-white/15 text-gray-200 border border-white/10 rounded-lg text-sm transition-colors"
               >
                 Clear
               </button>
@@ -145,43 +150,53 @@ export default function TasksList() {
         </div>
       </div>
 
+      {(error || actionError) && (
+        <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+          {actionError || error}
+        </p>
+      )}
+
       {/* Tasks Table */}
-      {tasks.length === 0 ? (
-        <div className="flex items-center justify-center py-12 bg-[#383838]/30 rounded-xl border border-gray-700/30">
+      {loading && tasks.length === 0 ? (
+        <div className="flex items-center justify-center py-12 glass-card rounded-2xl">
+          <p className="text-gray-400">Loading tasks...</p>
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="flex items-center justify-center py-12 glass-card rounded-2xl">
           <div className="text-center space-y-2">
-            <p className="text-gray-400">No tasks found</p>
+            <p className="text-gray-400">No tasks yet. Add your first task from the sidebar.</p>
           </div>
         </div>
       ) : (
         <>
           {/* Mobile list (small screens) */}
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-3 lg:hidden">
             {tasks.map((task) => (
-              <div key={task.id} className="bg-[#383838]/30 rounded-xl p-3 border border-gray-700/20 flex flex-col">
+              <div key={task.id} className="glass-card rounded-2xl p-4 flex flex-col">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
                     <input
                       type="checkbox"
                       checked={selectedTasks.includes(task.id)}
                       onChange={() => toggleTaskSelection(task.id)}
-                      className="rounded accent-blue-600 cursor-pointer mt-1"
+                      className="rounded accent-emerald-500 cursor-pointer mt-1"
                     />
-                    <div>
-                      <p className="text-white font-medium">{task.title}</p>
-                      <p className="text-gray-300 text-sm">{task.assignee}</p>
+                    <div className="min-w-0">
+                      <p className="text-white font-medium break-words">{task.title}</p>
+                      <p className="text-gray-300 text-sm break-words">{task.assignee}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => handleViewClick(task)}
-                      className="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors"
+                      className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                       title="View"
                     >
                       <Eye size={18} />
                     </button>
                     <button
                       onClick={() => handleEditClick(task)}
-                      className="p-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-colors"
+                      className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                       title="Edit"
                     >
                       <Edit2 size={18} />
@@ -203,28 +218,28 @@ export default function TasksList() {
                   <span className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
                     {task.priority}
                   </span>
-                  <p className="text-blue-400 text-sm ml-2">{task.hoursLogged}/{task.estimatedHours}h</p>
-                  <p className="text-gray-300 text-sm ml-2">{formatDate(task.dueDate)}</p>
+                  <p className="text-gray-200 text-sm">{task.hoursLogged}/{task.estimatedHours}h</p>
+                  <p className="text-gray-300 text-sm">{formatDate(task.dueDate)}</p>
                 </div>
               </div>
             ))}
           </div>
 
           {/* Desktop / tablet table (md+) */}
-          <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-700/30">
+          <div className="hidden lg:block overflow-x-auto glass-card rounded-2xl">
             <table className="w-full">
             <thead>
-              <tr className="bg-[#383838]/50 border-b border-gray-700/30">
+              <tr className="bg-white/5 border-b border-white/10">
                 <th className="px-4 py-3 text-left">
                   <input
                     type="checkbox"
                     checked={selectedTasks.length === tasks.length && tasks.length > 0}
                     onChange={selectAllTasks}
-                    className="rounded accent-blue-600 cursor-pointer"
+                    className="rounded accent-emerald-500 cursor-pointer"
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Title</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Assignee</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Assigned to</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Priority</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Hours</th>
@@ -234,20 +249,20 @@ export default function TasksList() {
             </thead>
             <tbody>
               {tasks.map((task) => (
-                <tr key={task.id} className="border-b border-gray-700/20 hover:bg-[#383838]/20 transition-colors">
+                <tr key={task.id} className="border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors">
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
                       checked={selectedTasks.includes(task.id)}
                       onChange={() => toggleTaskSelection(task.id)}
-                      className="rounded accent-blue-600 cursor-pointer"
+                      className="rounded accent-emerald-500 cursor-pointer"
                     />
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-white font-medium">{task.title}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-300 text-sm">{task.assignee}</p>
+                    <p className="text-gray-300 text-sm">{task.assignee || '—'}</p>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${getStatusColor(task.status)}`}>
@@ -260,7 +275,7 @@ export default function TasksList() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-blue-400 text-sm">{task.hoursLogged}/{task.estimatedHours}h</p>
+                    <p className="text-gray-200 text-sm">{task.hoursLogged}/{task.estimatedHours}h</p>
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-gray-300 text-sm">{formatDate(task.dueDate)}</p>
@@ -269,14 +284,14 @@ export default function TasksList() {
                     <div className="flex justify-end gap-2">
                       <button
                         onClick={() => handleViewClick(task)}
-                        className="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors"
+                        className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                         title="View"
                       >
                         <Eye size={18} />
                       </button>
                       <button
                         onClick={() => handleEditClick(task)}
-                        className="p-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-colors"
+                        className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                         title="Edit"
                       >
                         <Edit2 size={18} />

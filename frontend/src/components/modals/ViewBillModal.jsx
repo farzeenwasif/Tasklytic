@@ -21,7 +21,7 @@ export default function ViewTaskModal({ isOpen, task, onClose }) {
       case 'Completed':
         return 'bg-green-500/20 text-green-300 border-green-500/50';
       case 'In Progress':
-        return 'bg-blue-500/20 text-blue-300 border-blue-500/50';
+        return 'bg-blue-500/20 text-emerald-300 border-blue-500/50';
       case 'Ready to Assign':
         return 'bg-purple-500/20 text-purple-300 border-purple-500/50';
       case 'Scheduled':
@@ -42,11 +42,11 @@ export default function ViewTaskModal({ isOpen, task, onClose }) {
   const progressPercentage = task.estimatedHours > 0 ? Math.round((task.hoursLogged / task.estimatedHours) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-[#2A2A2A] rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-gray-700/50 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+      <div className="glass-panel modal-pop rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-700/30 sticky top-0 bg-[#2A2A2A]">
-          <h2 className="text-2xl font-bold text-white">Task Details</h2>
+        <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 sticky top-0 z-10 glass-header">
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Task Details</h2>
           <button
             onClick={onClose}
             type="button"
@@ -65,10 +65,10 @@ export default function ViewTaskModal({ isOpen, task, onClose }) {
           </div>
 
           {/* Assignee and Category */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <p className="text-sm text-gray-400 mb-1">Assignee</p>
-              <p className="text-white font-medium">{task.assignee}</p>
+              <p className="text-sm text-gray-400 mb-1">Assigned to</p>
+              <p className="text-white font-medium">{task.assignee || '—'}</p>
             </div>
             <div>
               <p className="text-sm text-gray-400 mb-1">Category</p>
@@ -77,7 +77,7 @@ export default function ViewTaskModal({ isOpen, task, onClose }) {
           </div>
 
           {/* Priority and Status */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-400 mb-2">Priority</p>
               <span className={`inline-block px-3 py-1 rounded-full border font-semibold text-sm ${getPriorityColor(task.priority)}`}>
@@ -96,11 +96,11 @@ export default function ViewTaskModal({ isOpen, task, onClose }) {
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <p className="text-sm text-gray-400">Hours Progress</p>
-              <p className="text-sm font-semibold text-blue-300">{progressPercentage}%</p>
+              <p className="text-sm font-semibold text-emerald-300">{progressPercentage}%</p>
             </div>
-            <div className="w-full bg-gray-700 rounded-full h-2">
+            <div className="w-full bg-white/10 rounded-full h-2">
               <div
-                className="bg-black h-2 rounded-full transition-all"
+                className="bg-emerald-400 h-2 rounded-full transition-all"
                 style={{ width: `${progressPercentage}%` }}
               />
             </div>
@@ -117,14 +117,14 @@ export default function ViewTaskModal({ isOpen, task, onClose }) {
           {task.description && (
             <div>
               <p className="text-sm text-gray-400 mb-2">Description</p>
-              <p className="text-gray-300 bg-[#383838] p-3 rounded-lg text-sm">{task.description}</p>
+              <p className="text-gray-300 bg-white/5 border border-white/10 p-3 rounded-lg text-sm">{task.description}</p>
             </div>
           )}
 
           {/* Summary Box */}
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 space-y-2">
-            <p className="text-sm text-blue-300 font-semibold">Task Summary</p>
-            <div className="space-y-1 text-xs text-blue-300">
+          <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-2">
+            <p className="text-sm text-emerald-300 font-semibold">Task Summary</p>
+            <div className="space-y-1 text-xs text-emerald-300">
               <p>• Priority: <span className="font-semibold">{task.priority}</span></p>
               <p>• Progress: <span className="font-semibold">{progressPercentage}% Complete</span></p>
               <p>• Time Estimate: <span className="font-semibold">{task.estimatedHours} hours</span></p>
@@ -134,7 +134,7 @@ export default function ViewTaskModal({ isOpen, task, onClose }) {
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="w-full px-4 py-2  bg-black hover:bg-[#121212] text-white rounded-lg font-medium transition-colors"
+            className="w-full px-4 py-2  btn-primary"
           >
             Close
           </button>

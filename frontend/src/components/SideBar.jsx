@@ -1,45 +1,49 @@
-import { Link } from 'react-router-dom';
-import FolderIcon from "@mui/icons-material/Folder";
-import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
-import Logo from '../assets/logo.png';
+import { NavLink } from 'react-router-dom';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import FolderIcon from '@mui/icons-material/Folder';
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+import PersonIcon from '@mui/icons-material/Person';
 
+const links = [
+  { to: '/dashboard', label: 'Dashboard', icon: <DashboardIcon />, end: true },
+  { to: '/tasks', label: 'All Tasks', icon: <FolderIcon />, end: true },
+  { to: '/tasks/add', label: 'Add Task', icon: <CreateNewFolderIcon /> },
+  { to: '/profile', label: 'Profile', icon: <PersonIcon /> },
+];
+
+const linkClass = ({ isActive }) =>
+  `transition-colors group relative flex flex-col items-center ${
+    isActive ? 'text-white' : 'text-gray-400 hover:text-white'
+  }`;
+
+// Vertical rail on tablet/desktop, fixed bottom bar on phones
 const SideBar = () => {
   return (
-    <div className='w-[60px] sticky flex flex-col items-center space-y-6 py-20 h-[500px] rounded-r-full left-0 top-[10vh] bg-[#45454559]'>
-        {/* Logo - Link to Home */}
-      <Link to="/" className="w-9 h-9 overflow-hidden flex items-center justify-center hover:opacity-80 transition-opacity" title="Home">
-        <img src={Logo} alt="logo" />
-      </Link>
+    <>
+      {/* Desktop / tablet */}
+      <nav className='hidden sm:flex shrink-0 w-[60px] self-start sticky top-[10vh] mt-[5vh] flex-col items-center gap-6 py-12 rounded-r-full bg-white/5 border border-l-0 border-white/10'>
+        <div className="flex flex-col items-center gap-6">
+          {links.map((l) => (
+            <NavLink key={l.to} to={l.to} end={l.end} className={linkClass} title={l.label}>
+              {l.icon}
+              <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                {l.label}
+              </span>
+            </NavLink>
+          ))}
+        </div>
+      </nav>
 
-      {/* Sidebar Icons */}
-      <div className="flex flex-col items-center space-y-6 mt-6">
-        {/* All Tasks */}
-        <Link
-          to="/tasks"
-          className="text-gray-400 hover:text-white transition-colors group relative"
-          title="All Tasks"
-        >
-          <FolderIcon />
-          <span className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-            All Tasks
-          </span>
-        </Link>
-
-        {/* Add Task */}
-        <Link
-          to="/tasks/add"
-          className="text-gray-400 hover:text-white transition-colors group relative"
-          title="Add Task"
-        >
-          <CreateNewFolderIcon />
-          <span className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-            Add Task
-          </span>
-        </Link>
-      </div>
-    </div>
+      {/* Phone bottom nav */}
+      <nav className='sm:hidden fixed bottom-0 inset-x-0 z-40 bg-[#1f1f1f]/95 backdrop-blur border-t border-[#383838] flex justify-around py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]'>
+        {links.map((l) => (
+          <NavLink key={l.to} to={l.to} end={l.end} className={linkClass}>
+            {l.icon}
+            <span className="text-[10px] mt-0.5">{l.label}</span>
+          </NavLink>
+        ))}
+      </nav>
+    </>
   )
 }
 export default SideBar
-
-

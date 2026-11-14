@@ -1,167 +1,106 @@
-import { createContext, useState, useCallback, useMemo, useContext } from 'react';
+import { createContext, useState, useCallback, useContext, useEffect } from 'react';
 import { UserContext } from './UserContext';
+import * as taskApi from '../services/taskService';
 
 export const TaskContext = createContext();
 
+// Backend uses _id and ISO dates; the UI uses id and YYYY-MM-DD (for <input type="date">)
+const normalizeTask = (t) => ({
+  ...t,
+  id: t._id,
+  dueDate: t.dueDate ? String(t.dueDate).slice(0, 10) : '',
+});
+
+// Strip UI-only/readonly fields before sending to the API
+const toPayload = (t) => {
+  // eslint-disable-next-line no-unused-vars
+  const { id, _id, userId, createdAt, updatedAt, __v, ...rest } = t;
+  return rest;
+};
+
 export function TaskProvider({ children }) {
-  // global storage of tasks for all users (demo)
-  const [tasks, setTasks] = useState([
-    {
-      id: 1,
-      userId: 'user-1',
-      title: 'Dashboard UI Design',
-      assignee: 'John Doe',
-      status: 'Ready to Assign',
-      priority: 'High',
-      hoursLogged: 3,
-      estimatedHours: 8,
-      dueDate: '2026-05-15',
-      category: 'Design',
-      description: 'Create dashboard mockups'
-    },
-    {
-      id: 2,
-      userId: 'user-1',
-      title: 'API Integration',
-      assignee: 'Jane Smith',
-      status: 'In Progress',
-      priority: 'Medium',
-      hoursLogged: 6,
-      estimatedHours: 10,
-      dueDate: '2026-02-20',
-      category: 'Development',
-      description: 'Integrate payment API'
-    },
-    {
-      id: 3,
-      userId: 'user-1',
-      title: 'Bug Fixes',
-      assignee: 'Mike Johnson',
-      status: 'Completed',
-      priority: 'Low',
-      hoursLogged: 3,
-      estimatedHours: 5,
-      dueDate: '2026-01-01',
-      category: 'Maintenance',
-      description: 'Fix critical bugs'
-    },
-    {
-      id: 4,
-      userId: 'user-1',
-      title: 'Team Meeting',
-      assignee: 'Sarah Lee',
-      status: 'Scheduled',
-      priority: 'Medium',
-      hoursLogged: 4,
-      estimatedHours: 1,
-      dueDate: '2026-04-01',
-      category: 'Meeting',
-      description: 'Weekly standup meeting'
-    },
-     {
-      id: 5,
-      userId: 'user-1',
-      title: 'Team Meeting',
-      assignee: 'Sarah Lee',
-      status: 'Scheduled',
-      priority: 'Medium',
-      hoursLogged: 5,
-      estimatedHours: 1,
-      dueDate: '2026-03-01',
-      category: 'Meeting',
-      description: 'Weekly standup meeting'
-    },
-    {
-      id: 6,
-      userId: 'user-1',
-      title: 'Team Meeting',
-      assignee: 'Sarah Lee',
-      status: 'Scheduled',
-      priority: 'Medium',
-      hoursLogged: 2,
-      estimatedHours: 1,
-      dueDate: '2025-12-01',
-      category: 'Meeting',
-      description: 'Weekly standup meeting'
-    },
-  ]);
-
-  const [selectedTasks, setSelectedTasks] = useState([]);
-
   const { user } = useContext(UserContext);
 
-  // Visible tasks for current user (derived)
-  const visibleTasks = useMemo(() => {
-    if (!user) return [];
-    return tasks.filter(t => t.userId === user.id);
-  }, [tasks, user]);
+  const [tasks, setTasks] = useState([]);
+  const [selectedTasks, setSelectedTasks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // Add task (assign to current user if not provided)
-  const addTask = useCallback((taskData) => {
-    const newTask = {
-      id: Date.now(),
-      userId: taskData.userId || (user ? user.id : 'user-1'),
-      ...taskData,
-    };
-    setTasks(prev => [...prev, newTask]);
-    return newTask;
-  }, [user]);
-
-  // Update task
-  const updateTask = useCallback((id, taskData) => {
-    setTasks(prev =>
-      prev.map(task => (task.id === id ? { ...task, ...taskData } : task))
-    );
+  const refreshTasks = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await taskApi.getTasks();
+      setTasks(data.map(normalizeTask));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load tasks');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // Delete task
-  const deleteTask = useCallback((id) => {
+  // Load this user's tasks whenever the logged-in user changes; clear on logout
+  useEffect(() => {
+    setSelectedTasks([]);
+    if (user?.id) {
+      refreshTasks();
+    } else {
+      setTasks([]);
+    }
+  }, [user?.id, refreshTasks]);
+
+  const addTask = useCallback(async (taskData) => {
+    const created = normalizeTask(await taskApi.createTask(toPayload(taskData)));
+    setTasks(prev => [created, ...prev]);
+    return created;
+  }, []);
+
+  const updateTask = useCallback(async (id, taskData) => {
+    const updated = normalizeTask(await taskApi.updateTask(id, toPayload(taskData)));
+    setTasks(prev => prev.map(task => (task.id === id ? updated : task)));
+    return updated;
+  }, []);
+
+  const deleteTask = useCallback(async (id) => {
+    await taskApi.deleteTask(id);
     setTasks(prev => prev.filter(task => task.id !== id));
     setSelectedTasks(prev => prev.filter(taskId => taskId !== id));
   }, []);
 
-  // Bulk delete
-  const bulkDeleteTasks = useCallback((ids) => {
+  const bulkDeleteTasks = useCallback(async (ids) => {
+    await taskApi.bulkDeleteTasks(ids);
     setTasks(prev => prev.filter(task => !ids.includes(task.id)));
     setSelectedTasks([]);
   }, []);
 
-  // Toggle task selection
   const toggleTaskSelection = useCallback((id) => {
     setSelectedTasks(prev =>
       prev.includes(id) ? prev.filter(taskId => taskId !== id) : [...prev, id]
     );
   }, []);
 
-  // Select all visible tasks
   const selectAllTasks = useCallback(() => {
-    if (selectedTasks.length === visibleTasks.length) {
-      setSelectedTasks([]);
-    } else {
-      setSelectedTasks(visibleTasks.map(task => task.id));
-    }
-  }, [visibleTasks, selectedTasks.length]);
+    setSelectedTasks(prev => (prev.length === tasks.length ? [] : tasks.map(task => task.id)));
+  }, [tasks]);
 
-  // Clear selection
   const clearSelection = useCallback(() => {
     setSelectedTasks([]);
   }, []);
 
-  // Get task statistics for visible tasks
-  const getTaskStats = useCallback(() => {
-    const stats = {
-      readyToAssign: visibleTasks.filter(t => t.status === 'Ready to Assign').length,
-      inProgress: visibleTasks.filter(t => t.status === 'In Progress').length,
-      completed: visibleTasks.filter(t => t.status === 'Completed').length,
-      scheduled: visibleTasks.filter(t => t.category === 'Meeting').length,
-      totalHoursLogged: visibleTasks.reduce((sum, t) => sum + (t.hoursLogged || 0), 0),
-    };
-    return stats;
-  }, [visibleTasks]);
+  const getTaskStats = useCallback(() => ({
+    readyToAssign: tasks.filter(t => t.status === 'Ready to Assign').length,
+    inProgress: tasks.filter(t => t.status === 'In Progress').length,
+    completed: tasks.filter(t => t.status === 'Completed').length,
+    scheduled: tasks.filter(t => t.category === 'Meeting').length,
+    totalHoursLogged: tasks.reduce((sum, t) => sum + (Number(t.hoursLogged) || 0), 0),
+  }), [tasks]);
 
   const value = {
-    tasks: visibleTasks,
+    tasks,
     selectedTasks,
+    loading,
+    error,
+    refreshTasks,
     addTask,
     updateTask,
     deleteTask,

@@ -1,18 +1,20 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { registerUser } from "../services/authService";
-
-import AdminNav from "../components/AdminNav";
-import SideBar from "../components/SideBar";
-import "../App.css";
+import { useContext, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import AuthShell, { authButtonClass, authInputClass } from "../components/auth/AuthShell";
+import PasswordField from "../components/auth/PasswordField";
+import { UserContext } from "../context/UserContext";
+import { getErrorMessage } from "../utils/apiClient";
+import { isPasswordValid } from "../utils/password";
 
 export default function Signup() {
   const navigate = useNavigate();
+  const { register } = useContext(UserContext);
 
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
+    confirmPassword: "",
     gender: "male",
   });
 
@@ -20,102 +22,99 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  const mismatch =
+    formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    setLoading(true);
     setError("");
 
-    try {
-      await registerUser(formData);
-
-      navigate("/login");
-    } catch (err) {
-      setError(err.response?.data?.message || "Registration failed");
+    if (!isPasswordValid(formData.password)) {
+      setError("Password does not meet the requirements");
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
     }
 
-    setLoading(false);
+    setLoading(true);
+    try {
+      // eslint-disable-next-line no-unused-vars
+      const { confirmPassword, ...payload } = formData;
+      await register(payload); // logs the user in automatically
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      setError(getErrorMessage(err, "Registration failed"));
+      setLoading(false);
+    }
   };
 
   return (
-      <div className='p-5 bg-img w-full overflow-hidden h-screen text-white flex justify-center items-center'>
-      <div className='z-100 w-full h-full max-w-[1400px] overflow-y-auto bg-[#2A2A2A]/60 rounded-3xl shadow-lg flex flex-col'>
-         <AdminNav />
+    <AuthShell
+      title="Create Account"
+      subtitle="Your own private dashboard"
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link to="/login" className="text-[#34D399] hover:underline">Log in</Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && <p className="text-red-400 text-sm">{error}</p>}
 
-        <div className="flex flex-1">
-          <SideBar />
+        <input
+          name="name"
+          placeholder="Name"
+          autoComplete="name"
+          required
+          value={formData.name}
+          onChange={handleChange}
+          className={authInputClass}
+        />
 
-          <div className="flex-1 flex items-center justify-center">
-            <form
-              onSubmit={handleSubmit}
-              className="bg-[#2a2a2a] p-8 rounded-xl w-[400px]"
-            >
-              <h2 className="text-2xl font-bold mb-6 text-center">
-                Create Account
-              </h2>
+        <input
+          type="email"
+          name="email"
+          placeholder="Email"
+          autoComplete="email"
+          required
+          value={formData.email}
+          onChange={handleChange}
+          className={authInputClass}
+        />
 
-              {error && (
-                <p className="text-red-400 text-sm mb-4">{error}</p>
-              )}
+        <PasswordField value={formData.password} onChange={handleChange} showRules />
 
-              <input
-                name="name"
-                placeholder="Name"
-                required
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full mb-4 px-4 py-2 rounded bg-[#3a3a3a]"
-              />
-
-              <input
-                type="email"
-                name="email"
-                placeholder="Email"
-                required
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full mb-4 px-4 py-2 rounded bg-[#3a3a3a]"
-              />
-
-              <input
-                type="password"
-                name="password"
-                placeholder="Password"
-                required
-                value={formData.password}
-                onChange={handleChange}
-                className="w-full mb-4 px-4 py-2 rounded bg-[#3a3a3a]"
-              />
-
-              <select
-                name="gender"
-                value={formData.gender}
-                onChange={handleChange}
-                className="w-full mb-6 px-4 py-2 rounded bg-[#3a3a3a]"
-              >
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-              </select>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2 bg-black rounded"
-              >
-                {loading ? "Creating..." : "Sign Up"}
-              </button>
-
-            </form>
-          </div>
+        <div>
+          <PasswordField
+            name="confirmPassword"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            placeholder="Confirm password"
+          />
+          {mismatch && <p className="text-red-400 text-xs mt-1.5">Passwords do not match</p>}
         </div>
-      </div>
-    </div>
+
+        <select
+          name="gender"
+          value={formData.gender}
+          onChange={handleChange}
+          className={authInputClass}
+        >
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="other">Other</option>
+        </select>
+
+        <button type="submit" disabled={loading} className={authButtonClass}>
+          {loading ? "Creating..." : "Sign Up"}
+        </button>
+      </form>
+    </AuthShell>
   );
 }

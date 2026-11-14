@@ -29,6 +29,11 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
     throw new ApiError(401, "User not found.");
   }
 
+  //  Reject tokens issued before the last password change
+  if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime() - 1000) {
+    throw new ApiError(401, "Password was changed. Please log in again.");
+  }
+
   //  Attach user to request
   req.user = user;
 

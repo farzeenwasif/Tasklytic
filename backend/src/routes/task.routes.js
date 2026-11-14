@@ -3,15 +3,19 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 import {
   createTask,
   getMyTasks,
+  getTaskById,
   updateTask,
-  deleteTask
+  deleteTask,
+  bulkDeleteTasks,
 } from "../controllers/task.controller.js";
 
 const router = express.Router();
 
-router.post("/", verifyJWT, createTask);
-router.get("/", verifyJWT, getMyTasks);
-router.patch("/:id", verifyJWT, updateTask);
-router.delete("/:id", verifyJWT, deleteTask);
+// Every task route requires a logged-in user
+router.use(verifyJWT);
+
+router.route("/").get(getMyTasks).post(createTask);
+router.post("/bulk-delete", bulkDeleteTasks);
+router.route("/:id").get(getTaskById).patch(updateTask).delete(deleteTask);
 
 export default router;

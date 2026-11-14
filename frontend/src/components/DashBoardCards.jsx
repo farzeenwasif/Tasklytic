@@ -7,12 +7,11 @@ const Card = ({ icon, gradient, progressColor, topText, mainValue, bottomText, p
 
   return (
     <div
-      className={`relative rounded-xl sm:w-auto w-[240px] p-5 flex flex-col justify-between shadow-lg 
-      bg-gradient-to-br ${gradient} backdrop-blur-sm`}
+      className={`relative rounded-2xl w-full min-h-[150px] gap-4 p-5 flex flex-col justify-between shadow-lg backdrop-blur-sm transition-transform duration-300 hover:-translate-y-1 ${gradient}`}
     >
       {/* Top Row */}
       <div className="flex justify-between items-start">
-        <div className="text-white opacity-90">{icon}</div>
+        <div className="w-11 h-11 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center text-white">{icon}</div>
         {/* Progress Circle */}
         <div className="relative w-12 h-12">
           <svg className="absolute top-0 left-0 w-12 h-12">
@@ -40,7 +39,7 @@ const Card = ({ icon, gradient, progressColor, topText, mainValue, bottomText, p
             />
           </svg>
           <span className="absolute inset-0 flex items-center justify-center text-xs text-white">
-            +{progress}%
+            {progress}%
           </span>
         </div>
       </div>
@@ -48,8 +47,8 @@ const Card = ({ icon, gradient, progressColor, topText, mainValue, bottomText, p
       {/* Bottom Text */}
       <div className="text-white">
         <p className="text-sm opacity-75">{topText}</p>
-        <p className="text-xl font-bold">{mainValue}</p>
-        <p className="text-sm opacity-75">{bottomText}</p>
+        <p className="text-2xl font-bold tracking-tight">{mainValue}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{bottomText}</p>
       </div>
     </div>
   );
@@ -62,25 +61,30 @@ export default function DashboardCards() {
   // Calculate progress percentages
   const readyToAssignProgress = tasks.length > 0 ? Math.round((stats.readyToAssign / tasks.length) * 100) : 0;
   const completedProgress = tasks.length > 0 ? Math.round((stats.completed / tasks.length) * 100) : 0;
-  const hoursLoggedProgress = Math.min(Math.round((stats.totalHoursLogged / (tasks.length * 10)) * 100), 100);
-  const meetingsProgress = stats.scheduled > 0 ? 100 : 0;
+  // Progress against the hours the user actually estimated; 0 when there is nothing to measure
+  const totalEstimatedHours = tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
+  const hoursLoggedProgress = totalEstimatedHours > 0
+    ? Math.min(Math.round((stats.totalHoursLogged / totalEstimatedHours) * 100), 100)
+    : 0;
+  // share of all tasks that are meetings
+  const meetingsProgress = tasks.length > 0 ? Math.round((stats.scheduled / tasks.length) * 100) : 0;
 
   const cards = [
     {
       id: 1,
-      icon: <FaUserAlt size={26} />,
+      icon: <FaUserAlt size={18} />,
       gradient: "card-gradient-purple",
-      progressColor: "text-purple-400",
+      progressColor: "text-violet-300",
       topText: "Ready to Assign",
       mainValue: stats.readyToAssign,
-      bottomText: `Total: ${tasks.length} tasks`,
+      bottomText: `In progress: ${stats.inProgress} · Total: ${tasks.length}`,
       progress: readyToAssignProgress,
     },
     {
       id: 2,
-      icon: <FaThLarge size={26} />,
+      icon: <FaThLarge size={18} />,
       gradient: "card-gradient-green",
-      progressColor: "text-green-400",
+      progressColor: "text-emerald-300",
       topText: "Tasks Completed",
       mainValue: `${stats.completed} / ${tasks.length}`,
       bottomText: `Remaining: ${tasks.length - stats.completed}`,
@@ -88,29 +92,29 @@ export default function DashboardCards() {
     },
     {
       id: 3,
-      icon: <FaClock size={26} />,
+      icon: <FaClock size={18} />,
       gradient: "card-gradient-amber",
-      progressColor: "text-amber-400",
+      progressColor: "text-violet-300",
       topText: "Hours Logged",
       mainValue: `${stats.totalHoursLogged}h`,
-      bottomText: `Target: ${tasks.length * 10}h`,
+      bottomText: `Estimated: ${totalEstimatedHours}h`,
       progress: hoursLoggedProgress,
     },
     {
       id: 4,
-      icon: <FaVideo size={26} />,
+      icon: <FaVideo size={18} />,
       gradient: "card-gradient-cyan",
-      progressColor: "text-yellow-300",
+      progressColor: "text-emerald-300",
       topText: "Meetings Scheduled",
       mainValue: `${stats.scheduled} Scheduled`,
-      bottomText: `Status: Active`,
+      bottomText: stats.scheduled > 0 ? `Status: Active` : `No meetings yet`,
       progress: meetingsProgress,
     },
   ];
 
   return (
     <div>
-      <div className="grid grid-cols-1 sm:grid-cols-2  lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
         {cards.map((card) => (
           <Card
             key={card.id}

@@ -1,28 +1,21 @@
-import dotenv from 'dotenv';
-import connectDB from './db/index.js';
-import app from './app.js';
-dotenv.config({
-    path: './.env'
-});
+import dotenv from "dotenv";
+dotenv.config({ path: "./.env" });
+
+// Import app AFTER dotenv so env vars (e.g. CORS_ORIGIN) are available at module load
+const { default: app } = await import("./app.js");
+const { default: connectDB } = await import("./db/index.js");
+
 connectDB()
-.then(()=>{
-    app.listen(process.env.PORT,()=>{
-        console.log(`\n Server is running on port ${process.env.PORT}`);
-    })
-    app.on("error",(error)=>{
-        console.log("Error: ",error);
-        throw error;
+  .then(() => {
+    const port = process.env.PORT || 8000;
+    const server = app.listen(port, () => {
+      console.log(`\n Server is running on port ${port}`);
     });
-})
-.catch((err)=>{
-    console.log("Error in connecting to DB: ",err);
-});
-
-
-
-
-
-
-
-
-
+    server.on("error", (error) => {
+      console.log("Server error: ", error);
+      process.exit(1);
+    });
+  })
+  .catch((err) => {
+    console.log("Error in connecting to DB: ", err);
+  });

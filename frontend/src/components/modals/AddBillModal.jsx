@@ -1,16 +1,21 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
+import { UserContext } from '../../context/UserContext';
 import { X } from 'lucide-react';
+import { TASK_CATEGORIES, DEFAULT_CATEGORY } from '../../constants/taskOptions';
 
 export default function AddTaskModal({ isOpen, onClose, onAdd }) {
+  const { user } = useContext(UserContext);
+  // A personal task is yours by default; the field can still be changed
+  const defaultAssignee = user?.name || '';
   const [formData, setFormData] = useState({
     title: '',
-    assignee: '',
+    assignee: defaultAssignee,
     status: 'Ready to Assign',
     priority: 'Medium',
     hoursLogged: 0,
     estimatedHours: '',
     dueDate: '',
-    category: 'Development',
+    category: DEFAULT_CATEGORY,
     description: '',
   });
 
@@ -34,35 +39,46 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
   const validateForm = () => {
     const newErrors = {};
     if (!formData.title.trim()) newErrors.title = 'Task title is required';
-    if (!formData.assignee.trim()) newErrors.assignee = 'Assignee is required';
     if (!formData.estimatedHours || formData.estimatedHours <= 0) newErrors.estimatedHours = 'Valid hours is required';
     if (!formData.dueDate) newErrors.dueDate = 'Due date is required';
     return newErrors;
   };
 
-  const handleSubmit = (e) => {
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = validateForm();
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    onAdd({
-      ...formData,
-      estimatedHours: parseFloat(formData.estimatedHours),
-      hoursLogged: parseFloat(formData.hoursLogged) || 0,
-    });
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      await onAdd({
+        ...formData,
+        estimatedHours: parseFloat(formData.estimatedHours),
+        hoursLogged: parseFloat(formData.hoursLogged) || 0,
+      });
+    } catch (err) {
+      setSubmitError(err.response?.data?.message || 'Failed to add task');
+      setSubmitting(false);
+      return;
+    }
+    setSubmitting(false);
     setFormData({
       title: '',
-      assignee: '',
+      assignee: defaultAssignee,
       status: 'Ready to Assign',
       priority: 'Medium',
       hoursLogged: 0,
       estimatedHours: '',
       dueDate: '',
-      category: 'Development',
+      category: DEFAULT_CATEGORY,
       description: '',
     });
     setErrors({});
@@ -72,11 +88,11 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-[#2A2A2A] rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-gray-700/50 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+      <div className="glass-panel modal-pop rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-700/30 sticky top-0 bg-[#2A2A2A]">
-          <h2 className="text-2xl font-bold text-white">Add New Task</h2>
+        <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 sticky top-0 z-10 glass-header">
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Add New Task</h2>
           <button
             onClick={onClose}
             type="button"
@@ -98,13 +114,13 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
               name="title"
               value={formData.title}
               onChange={handleChange}
-              placeholder="e.g., Dashboard UI Design"
-              className="w-full px-4 py-2 bg-[#383838] border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              placeholder="e.g., Prepare monthly report"
+              className="w-full px-4 py-2 glass-input rounded-lg"
             />
             {errors.title && <p className="text-red-400 text-sm mt-1">{errors.title}</p>}
           </div>
 
-          {/* Assignee */}
+          {/* Assigned to/}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Assignee *
@@ -114,14 +130,14 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
               name="assignee"
               value={formData.assignee}
               onChange={handleChange}
-              placeholder="e.g., John Doe"
-              className="w-full px-4 py-2 bg-[#383838] border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              placeholder="Who will do this task?"
+              className="w-full px-4 py-2 glass-input rounded-lg"
             />
             {errors.assignee && <p className="text-red-400 text-sm mt-1">{errors.assignee}</p>}
           </div>
 
           {/* Priority and Status */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Priority
@@ -130,7 +146,7 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
                 name="priority"
                 value={formData.priority}
                 onChange={handleChange}
-                className="w-full px-4 py-2 bg-[#383838] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full px-4 py-2 glass-input rounded-lg"
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -145,7 +161,7 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className="w-full px-4 py-2 bg-[#383838] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full px-4 py-2 glass-input rounded-lg"
               >
                 <option value="Ready to Assign">Ready to Assign</option>
                 <option value="In Progress">In Progress</option>
@@ -156,7 +172,7 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
           </div>
 
           {/* Hours */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Hours Logged
@@ -168,7 +184,7 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
                 onChange={handleChange}
                 placeholder="0"
                 step="0.5"
-                className="w-full px-4 py-2 bg-[#383838] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full px-4 py-2 glass-input rounded-lg"
               />
             </div>
             <div>
@@ -182,14 +198,14 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
                 onChange={handleChange}
                 placeholder="0"
                 step="0.5"
-                className="w-full px-4 py-2 bg-[#383838] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full px-4 py-2 glass-input rounded-lg"
               />
               {errors.estimatedHours && <p className="text-red-400 text-sm mt-1">{errors.estimatedHours}</p>}
             </div>
           </div>
 
           {/* Category and Due Date */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Category
@@ -198,13 +214,11 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
                 name="category"
                 value={formData.category}
                 onChange={handleChange}
-                className="w-full px-4 py-2 bg-[#383838] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full px-4 py-2 glass-input rounded-lg"
               >
-                <option value="Development">Development</option>
-                <option value="Design">Design</option>
-                <option value="Testing">Testing</option>
-                <option value="Meeting">Meeting</option>
-                <option value="Maintenance">Maintenance</option>
+                {TASK_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -216,7 +230,7 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
                 name="dueDate"
                 value={formData.dueDate}
                 onChange={handleChange}
-                className="w-full px-4 py-2 bg-[#383838] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full px-4 py-2 glass-input rounded-lg"
               />
               {errors.dueDate && <p className="text-red-400 text-sm mt-1">{errors.dueDate}</p>}
             </div>
@@ -233,24 +247,27 @@ export default function AddTaskModal({ isOpen, onClose, onAdd }) {
               onChange={handleChange}
               placeholder="Add task details..."
               rows="3"
-              className="w-full px-4 py-2 bg-[#383838] border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full px-4 py-2 glass-input rounded-lg resize-none"
             />
           </div>
+
+          {submitError && <p className="text-red-400 text-sm">{submitError}</p>}
 
           {/* Buttons */}
           <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+              className="flex-1 px-4 py-2 btn-ghost"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2  bg-black hover:bg-[#121212] text-white rounded-lg font-medium transition-colors"
+              disabled={submitting}
+              className="flex-1 px-4 py-2  btn-primary"
             >
-              Add Task
+              {submitting ? 'Adding...' : 'Add Task'}
             </button>
           </div>
         </form>

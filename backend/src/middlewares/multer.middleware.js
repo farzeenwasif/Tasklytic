@@ -1,15 +1,13 @@
 import multer from "multer";
+import { ApiError } from "../utils/apiError.js";
 
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-      cb(null, "./public/temp")
-    },
-    filename: function (req, file, cb) {
-      
-      cb(null, file.originalname)
-    }
-  })
-  
-export const upload = multer({ 
-    storage, 
-})
+// Keep the file in memory and stream it straight to Cloudinary:
+// no temp folder needed, which also works on hosts with read-only disks.
+export const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)) return cb(null, true);
+    cb(new ApiError(400, "Only JPG, PNG, WEBP or GIF images are allowed"));
+  },
+});

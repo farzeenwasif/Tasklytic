@@ -1,4 +1,4 @@
-import Admin from "./components/admin";
+import Admin from "./components/Admin";
 
 export default function App() {
   return (
