@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useState } from "react";
 import * as authApi from "../services/authService";
+import * as billingApi from "../services/billingService";
 import { getToken, saveToken, removeToken } from "../utils/token";
 import defaultAvatar from "../assets/default-avatar.svg";
 
@@ -26,6 +27,12 @@ export function UserProvider({ children }) {
 
   const logout = useCallback(() => {
     removeToken();
+    // per-session AI data must not leak to the next account in this tab
+    try {
+      sessionStorage.removeItem("tasklytic:insights");
+      sessionStorage.removeItem("tasklytic:play-briefing");
+      window.speechSynthesis?.cancel();
+    } catch { /* storage blocked */ }
     setUserState(null);
   }, []);
 
@@ -88,6 +95,13 @@ export function UserProvider({ children }) {
     [setUser]
   );
 
+  // After Stripe checkout: pull the latest plan from Stripe
+  const syncSubscription = useCallback(async () => {
+    const u = await billingApi.syncSubscription();
+    setUser(u);
+    return u;
+  }, [setUser]);
+
   const removeAvatar = useCallback(async () => {
     const u = await authApi.removeAvatar();
     setUser(u);
@@ -106,6 +120,8 @@ export function UserProvider({ children }) {
         updateProfile,
         uploadAvatar,
         removeAvatar,
+        syncSubscription,
+        isPremium: !!user?.isPremium,
       }}
     >
       {children}

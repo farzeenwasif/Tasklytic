@@ -1,10 +1,10 @@
 import { useContext } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { LogOut, Sparkles } from 'lucide-react'
 import { UserContext } from '../context/UserContext'
 
 export default function UserNavIcons() {
-  const { user, logout } = useContext(UserContext)
+  const { user, logout, isPremium } = useContext(UserContext)
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -16,6 +16,22 @@ export default function UserNavIcons() {
 
   return (
     <div className="flex items-center gap-4">
+      {isPremium ? (
+        <Link
+          to="/billing"
+          title="Premium plan"
+          className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-400/15 text-emerald-300 border border-emerald-400/40"
+        >
+          <Sparkles size={12} /> PRO
+        </Link>
+      ) : (
+        <Link
+          to="/billing"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-[#0b0b0c] hover:bg-zinc-200 transition-colors"
+        >
+          <Sparkles size={13} /> Upgrade
+        </Link>
+      )}
       <div
         onClick={() => navigate('/profile')}
         className="flex items-center gap-3 cursor-pointer"

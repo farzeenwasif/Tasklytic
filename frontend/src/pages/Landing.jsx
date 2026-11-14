@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import BrandLogo, { BRAND_NAME } from '../components/BrandLogo'
 import { UserContext } from '../context/UserContext'
+import PricingCards from '../components/PricingCards'
 
 // three.js is heavy: load the 3D scene separately so the page text appears instantly
 const HeroScene = lazy(() => import('../components/landing/HeroScene'))
@@ -250,6 +251,7 @@ export default function Landing() {
   const navLinks = [
     { href: '#features', label: 'Features' },
     { href: '#how', label: 'How it works' },
+    { href: '#pricing', label: 'Pricing' },
   ]
 
   const heroItem = {
@@ -462,6 +464,35 @@ export default function Landing() {
             </div>
           </section>
 
+          {/* ---------- Pricing ---------- */}
+          <section id="pricing" className="scroll-mt-20 border-t border-white/5 bg-[#111113]/60">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
+              <Reveal className="text-center max-w-2xl mx-auto mb-12">
+                <p className="text-sm font-semibold text-[#34D399] uppercase tracking-wider">Pricing</p>
+                <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-white">Start free. Add AI when you're ready.</h2>
+                <p className="mt-4 text-gray-400">
+                  Premium adds a built-in AI assistant. Cancel anytime.
+                </p>
+              </Reveal>
+              <Reveal>
+                <PricingCards
+                  renderAction={(plan) => (
+                    <Link
+                      to={plan.id === 'premium' ? '/signup?plan=premium' : '/signup'}
+                      className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold transition-colors ${
+                        plan.id === 'premium'
+                          ? 'text-[#0B0B0C] bg-white hover:bg-zinc-200'
+                          : 'text-white bg-white/10 border border-white/10 hover:bg-white/15'
+                      }`}
+                    >
+                      {plan.id === 'premium' ? 'Get Premium' : 'Start for free'} <ArrowRight size={18} />
+                    </Link>
+                  )}
+                />
+              </Reveal>
+            </div>
+          </section>
+
           {/* ---------- CTA ---------- */}
           <section className="border-t border-white/5 px-4 sm:px-6 py-16 sm:py-24">
             <Reveal className="max-w-5xl mx-auto relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#17171a] via-[#141416] to-[#141416] px-6 py-12 sm:p-14 text-center">
@@ -493,6 +524,7 @@ export default function Landing() {
             <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2">
               <a href="#features" className="hover:text-white transition-colors">Features</a>
               <a href="#how" className="hover:text-white transition-colors">How it works</a>
+              <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
               {!user && <Link to="/login" className="hover:text-white transition-colors">Log in</Link>}
             </nav>
             <p>© {new Date().getFullYear()} {BRAND_NAME}</p>

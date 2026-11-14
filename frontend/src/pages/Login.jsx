@@ -4,6 +4,7 @@ import AuthShell, { authButtonClass, authInputClass } from "../components/auth/A
 import PasswordField from "../components/auth/PasswordField";
 import { UserContext } from "../context/UserContext";
 import { getErrorMessage } from "../utils/apiClient";
+import { BRIEFING_FLAG } from "../components/AIAssistant";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -27,7 +28,11 @@ export default function Login() {
     setError("");
 
     try {
-      await login(formData);
+      const u = await login(formData);
+      // Premium: the dashboard reads today's briefing aloud once after login
+      if (u?.isPremium) {
+        try { sessionStorage.setItem(BRIEFING_FLAG, "1"); } catch { /* private mode */ }
+      }
       // Go back to the page the user originally wanted, or the dashboard
       navigate(location.state?.from?.pathname || "/dashboard", { replace: true });
     } catch (err) {

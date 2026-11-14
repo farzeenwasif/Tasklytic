@@ -11,6 +11,7 @@
     "dev": "nodemon src/index.js"
   },
   "dependencies": {
+    "@google/genai": "^3.3.0",
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.7.0",
     "cookie-parser": "^1.4.7",
@@ -22,6 +23,7 @@
     "multer": "^2.0.2",
     "nodemailer": "^10.5.0",
     "nodemon": "^3.1.10",
-    "prettier": "^3.6.2"
+    "prettier": "^3.6.2",
+    "stripe": "^23.1.0"
   }
 }

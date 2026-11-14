@@ -11,6 +11,8 @@ export const ACTIVITY_ACTIONS = [
   "hours_logged",
   "task_deleted",
   "tasks_bulk_deleted",
+  "plan_upgraded",
+  "plan_downgraded",
 ];
 
 const activitySchema = new mongoose.Schema(

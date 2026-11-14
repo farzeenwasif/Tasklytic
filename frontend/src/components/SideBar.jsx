@@ -2,13 +2,12 @@ import { NavLink } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import FolderIcon from '@mui/icons-material/Folder';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
-import PersonIcon from '@mui/icons-material/Person';
 
+// Profile is reached from the avatar in the top bar, so it isn't listed here
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: <DashboardIcon />, end: true },
   { to: '/tasks', label: 'All Tasks', icon: <FolderIcon />, end: true },
   { to: '/tasks/add', label: 'Add Task', icon: <CreateNewFolderIcon /> },
-  { to: '/profile', label: 'Profile', icon: <PersonIcon /> },
 ];
 
 const linkClass = ({ isActive }) =>
@@ -21,7 +20,7 @@ const SideBar = () => {
   return (
     <>
       {/* Desktop / tablet */}
-      <nav className='hidden sm:flex shrink-0 w-[60px] self-start sticky top-[10vh] mt-[5vh] flex-col items-center gap-6 py-12 rounded-r-full bg-white/5 border border-l-0 border-white/10'>
+      <nav className='hidden sm:flex shrink-0 w-[60px] self-center flex-col items-center gap-6 py-12 rounded-r-full bg-white/5 border border-l-0 border-white/10'>
         <div className="flex flex-col items-center gap-6">
           {links.map((l) => (
             <NavLink key={l.to} to={l.to} end={l.end} className={linkClass} title={l.label}>

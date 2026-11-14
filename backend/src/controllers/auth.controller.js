@@ -8,17 +8,13 @@ import { logActivity } from "../utils/logActivity.js";
 import { uploadAvatar, deleteAvatar } from "../utils/cloudinary.js";
 import { validatePassword } from "../utils/password.js";
 import { sendPasswordResetEmail, sendPasswordChangedEmail } from "../utils/email.js";
+import { getFrontendUrl } from "../utils/frontendUrl.js";
 
 const RESET_TOKEN_MINUTES = 15;
 const RESET_REQUEST_COOLDOWN_MS = 60 * 1000;
 
 const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 
-// Where the reset link points: FRONTEND_URL, or the first allowed CORS origin
-const getFrontendUrl = () =>
-  (process.env.FRONTEND_URL || (process.env.CORS_ORIGIN || "http://localhost:5173").split(",")[0])
-    .trim()
-    .replace(/\/+$/, "");
 
 const generateAccessToken = (userId) => {
   return jwt.sign({ _id: userId }, process.env.ACCESS_TOKEN_SECRET, {

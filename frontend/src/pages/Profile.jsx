@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react'
-import { Loader2, Pencil } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Loader2, Pencil, Sparkles } from 'lucide-react'
 import { UserContext } from '../context/UserContext'
 import { TaskContext } from '../context/BillContext'
 import { getErrorMessage } from '../utils/apiClient'
@@ -102,10 +103,10 @@ export default function Profile() {
   ]
 
   return (
-    <Layout title='My Profile'>
-      <div className='max-w-4xl space-y-6'>
-        {/* Header card */}
-        <div className='glass-card rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-center text-center sm:text-left gap-6'>
+    <Layout>
+      <div className='max-w-5xl mx-auto space-y-6'>
+        {/* Header card: avatar, details and stats stacked and centered */}
+        <div className='glass-card rounded-2xl p-5 sm:p-6 flex flex-col items-center text-center gap-5'>
           {/* Avatar with pencil button to change the photo */}
           <div className='flex flex-col items-center gap-2 shrink-0'>
             <div className='relative w-24 h-24'>
@@ -141,14 +142,27 @@ export default function Profile() {
             <Status msg={avatarMsg} />
           </div>
 
-          <div className='flex-1 min-w-0'>
+          <div className='min-w-0 max-w-xl'>
             <p className='font-bold text-2xl break-words'>{user.name}</p>
             <p className='text-sm text-gray-300 break-all'>{user.email}</p>
             {user.bio && <p className='text-sm text-gray-300 mt-2'>{user.bio}</p>}
             {memberSince && <p className='text-xs text-gray-400 mt-2'>Member since {memberSince}</p>}
+            <Link
+              to='/billing'
+              className={`inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                user.isPremium
+                  ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/40 hover:bg-emerald-400/25'
+                  : 'bg-white/5 text-gray-200 border-white/15 hover:bg-white/10'
+              }`}
+            >
+              <Sparkles size={12} />
+              {user.complimentary
+                ? 'Premium (complimentary)'
+                : user.isPremium ? 'Premium plan · Manage' : 'Free plan · Upgrade to Premium'}
+            </Link>
           </div>
 
-          <div className='grid grid-cols-3 gap-3 text-center w-full sm:w-auto'>
+          <div className='grid grid-cols-3 gap-3 text-center w-full max-w-md'>
             {profileStats.map((s) => (
               <div key={s.label} className='rounded-xl bg-white/5 border border-white/10 px-4 py-3'>
                 <p className='text-xl font-bold'>{s.value}</p>
@@ -160,7 +174,7 @@ export default function Profile() {
 
         {/* Edit profile */}
         <form onSubmit={handleProfileSubmit} className='glass-card rounded-2xl p-5 sm:p-6 space-y-4'>
-          <h3 className='text-xl font-bold'>Edit Profile</h3>
+          <h3 className='text-xl font-bold text-center'>Edit Profile</h3>
           <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
             <div>
               <label className='block text-sm text-gray-300 mb-1'>Name</label>
@@ -187,10 +201,12 @@ export default function Profile() {
             <textarea rows='3' maxLength={300} className={`${inputClass} resize-none`} value={profile.bio}
               onChange={(e) => setProfile({ ...profile, bio: e.target.value })} />
           </div>
-          <Status msg={profileMsg} />
-          <button type='submit' disabled={savingProfile} className='btn-primary'>
-            {savingProfile ? 'Saving...' : 'Save Changes'}
-          </button>
+          <div className='flex flex-col items-center gap-2 text-center'>
+            <Status msg={profileMsg} />
+            <button type='submit' disabled={savingProfile} className='btn-primary'>
+              {savingProfile ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
         </form>
       </div>
     </Layout>

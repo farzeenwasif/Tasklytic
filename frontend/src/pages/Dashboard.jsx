@@ -3,11 +3,16 @@ import AmountCard from '../components/AmountCard'
 import Chart from '../components/Chart'
 import ActivityLog from '../components/ActivityLog'
 import DashboardCards from '../components/DashBoardCards'
+import AIAssistant from '../components/AIAssistant'
 
 export default function Dashboard() {
   return (
     <Layout>
       <DashboardCards />
+
+      <div className='mt-6'>
+        <AIAssistant />
+      </div>
 
       {/* phone: stacked · laptop: gauge + chart, log below · wide: all three in a row */}
       <div className='mt-6 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,460px)_minmax(0,1fr)] gap-6 items-end justify-items-center lg:justify-items-stretch'>

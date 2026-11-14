@@ -1,5 +1,5 @@
 import { useContext, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import AuthShell, { authButtonClass, authInputClass } from "../components/auth/AuthShell";
 import PasswordField from "../components/auth/PasswordField";
 import { UserContext } from "../context/UserContext";
@@ -8,6 +8,8 @@ import { isPasswordValid } from "../utils/password";
 
 export default function Signup() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const wantsPremium = searchParams.get("plan") === "premium";
   const { register } = useContext(UserContext);
 
   const [formData, setFormData] = useState({
@@ -46,7 +48,8 @@ export default function Signup() {
       // eslint-disable-next-line no-unused-vars
       const { confirmPassword, ...payload } = formData;
       await register(payload); // logs the user in automatically
-      navigate("/dashboard", { replace: true });
+      // Came from "Get Premium" on the landing page: go straight to checkout options
+      navigate(wantsPremium ? "/billing" : "/dashboard", { replace: true });
     } catch (err) {
       setError(getErrorMessage(err, "Registration failed"));
       setLoading(false);

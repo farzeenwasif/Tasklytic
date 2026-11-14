@@ -6,6 +6,7 @@ import {
   LogIn,
   Pencil,
   PlusCircle,
+  Sparkles,
   Trash2,
   UserCog,
   UserPlus,
@@ -25,6 +26,8 @@ const ACTION_STYLE = {
   hours_logged: { icon: Clock, cls: 'bg-white/10 text-zinc-300' },
   task_deleted: { icon: Trash2, cls: 'bg-red-500/20 text-red-300' },
   tasks_bulk_deleted: { icon: Trash2, cls: 'bg-red-500/20 text-red-300' },
+  plan_upgraded: { icon: Sparkles, cls: 'bg-emerald-400/15 text-emerald-300' },
+  plan_downgraded: { icon: Sparkles, cls: 'bg-white/10 text-zinc-300' },
 }
 
 const timeAgo = (date) => {

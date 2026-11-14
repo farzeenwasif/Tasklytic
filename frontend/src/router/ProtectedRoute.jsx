@@ -20,7 +20,7 @@ export function ProtectedRoute() {
   return <Outlet />
 }
 
-// Login/Signup: redirect away if already logged in
+// Landing/Login/Signup/Forgot password: redirect away if already logged in
 export function PublicOnlyRoute() {
   const { user, authLoading } = useContext(UserContext)
 

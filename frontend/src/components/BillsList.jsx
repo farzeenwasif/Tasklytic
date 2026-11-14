@@ -1,10 +1,15 @@
-import { useContext, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Plus, Search, Trash2, X } from 'lucide-react';
 import { TaskContext } from '../context/BillContext';
-import { Edit2, Eye, Trash2 } from 'lucide-react';
+import { TASK_STATUSES } from '../constants/taskOptions';
+import TaskCard from './TaskCard';
 import EditTaskModal from './modals/EditBillModal';
 import ViewTaskModal from './modals/ViewBillModal';
 import DeleteConfirmModal from './modals/DeleteConfirmModal';
 import BulkDeleteConfirmModal from './modals/BulkDeleteConfirmModal';
+
+const FILTERS = ['All', ...TASK_STATUSES];
 
 export default function TasksList() {
   const {
@@ -16,7 +21,6 @@ export default function TasksList() {
     deleteTask,
     bulkDeleteTasks,
     toggleTaskSelection,
-    selectAllTasks,
     clearSelection,
   } = useContext(TaskContext);
 
@@ -26,60 +30,55 @@ export default function TasksList() {
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [actionError, setActionError] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [query, setQuery] = useState('');
 
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'High':
-        return 'bg-red-500/20 text-red-400 border-red-500/50';
-      case 'Medium':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
-      case 'Low':
-        return 'bg-green-500/20 text-green-400 border-green-500/50';
-      default:
-        return 'bg-gray-500/20 text-gray-300 border-gray-500/50';
-    }
+  const counts = useMemo(() => {
+    const c = { All: tasks.length };
+    TASK_STATUSES.forEach((s) => { c[s] = tasks.filter((t) => t.status === s).length; });
+    return c;
+  }, [tasks]);
+
+  const visibleTasks = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return tasks.filter((t) => {
+      if (statusFilter !== 'All' && t.status !== statusFilter) return false;
+      if (!q) return true;
+      return [t.title, t.description, t.assignee, t.category]
+        .some((v) => v && String(v).toLowerCase().includes(q));
+    });
+  }, [tasks, statusFilter, query]);
+
+  // Changing the filter clears the selection so a bulk delete never hits hidden tasks
+  const changeFilter = (f) => {
+    setStatusFilter(f);
+    clearSelection();
+  };
+  const changeQuery = (q) => {
+    setQuery(q);
+    clearSelection();
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Completed':
-        return 'bg-green-500/20 text-green-400 border-green-500/50';
-      case 'In Progress':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/50';
-      case 'Ready to Assign':
-        return 'bg-purple-500/20 text-purple-400 border-purple-500/50';
-      case 'Scheduled':
-        return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50';
-      default:
-        return 'bg-gray-500/20 text-gray-300 border-gray-500/50';
-    }
-  };
+  const allVisibleSelected =
+    visibleTasks.length > 0 && visibleTasks.every((t) => selectedTasks.includes(t.id));
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+  const toggleSelectVisible = () => {
+    visibleTasks.forEach((t) => {
+      const isSelected = selectedTasks.includes(t.id);
+      if (allVisibleSelected ? isSelected : !isSelected) toggleTaskSelection(t.id);
     });
   };
 
-  const handleEditClick = (task) => {
+  const openWith = (setOpen) => (task) => {
     setSelectedTask(task);
-    setIsEditModalOpen(true);
+    setOpen(true);
   };
+  const handleViewClick = openWith(setIsViewModalOpen);
+  const handleEditClick = openWith(setIsEditModalOpen);
+  const handleDeleteClick = openWith(setIsDeleteModalOpen);
 
   // Throws on API error so the edit modal can show it; the modal closes itself on success
   const handleUpdateTask = (taskData) => updateTask(selectedTask.id, taskData);
-
-  const handleViewClick = (task) => {
-    setSelectedTask(task);
-    setIsViewModalOpen(true);
-  };
-
-  const handleDeleteClick = (task) => {
-    setSelectedTask(task);
-    setIsDeleteModalOpen(true);
-  };
 
   const handleConfirmDelete = async () => {
     if (!selectedTask) return;
@@ -107,48 +106,84 @@ export default function TasksList() {
     }
   };
 
-  const getSelectedTasksData = () => {
-    const selected = tasks.filter(task => selectedTasks.includes(task.id));
-    const totalHours = selected.reduce((sum, task) => sum + (Number(task.hoursLogged) || 0), 0);
-    return { selected, totalHours };
-  };
-
-  const { totalHours } = getSelectedTasksData();
+  const totalHours = tasks
+    .filter((task) => selectedTasks.includes(task.id))
+    .reduce((sum, task) => sum + (Number(task.hoursLogged) || 0), 0);
 
   return (
-    <div className="w-full space-y-4">
-      {/* Header with Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-3">
-          <h3 className="text-xl font-bold text-white">Tasks List</h3>
-          <span className="px-3 py-1 bg-white/10 text-gray-200 rounded-full text-sm border border-white/10">
-            {tasks.length} tasks
-          </span>
+    <div className="w-full space-y-5">
+      {/* Toolbar: search + new task */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-sm">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => changeQuery(e.target.value)}
+            placeholder="Search tasks, people, categories..."
+            className="glass-input w-full pl-9 pr-4 py-2.5 rounded-xl text-sm"
+          />
         </div>
+        <Link to="/tasks/add" className="btn-primary px-4 py-2.5 self-start sm:self-auto">
+          <Plus size={16} /> New task
+        </Link>
+      </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {selectedTasks.length > 0 && (
-            <>
-              <span className="text-sm text-gray-300">
-                {selectedTasks.length} selected
+      {/* Status filter pills */}
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {FILTERS.map((f) => {
+          const active = statusFilter === f;
+          return (
+            <button
+              key={f}
+              type="button"
+              onClick={() => changeFilter(f)}
+              className={`shrink-0 flex items-center gap-2 px-3.5 py-1.5 rounded-full text-sm border transition-colors ${
+                active
+                  ? 'bg-white text-[#0b0b0c] border-white font-semibold'
+                  : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {f}
+              <span className={`text-xs rounded-full px-1.5 ${active ? 'bg-black/10' : 'bg-white/10'}`}>
+                {counts[f] ?? 0}
               </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Selection bar */}
+      {visibleTasks.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 min-h-9">
+          <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={toggleSelectVisible}
+              className="accent-emerald-500 cursor-pointer w-4 h-4"
+            />
+            Select all ({visibleTasks.length})
+          </label>
+          {selectedTasks.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-300">{selectedTasks.length} selected</span>
               <button
                 onClick={handleBulkDelete}
-                className="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/50 rounded-lg text-sm transition-colors flex items-center gap-1"
+                className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/50 rounded-lg text-sm transition-colors flex items-center gap-1.5"
               >
-                <Trash2 size={14} />
-                Delete
+                <Trash2 size={14} /> Delete
               </button>
               <button
                 onClick={clearSelection}
-                className="px-3 py-1 bg-white/10 hover:bg-white/15 text-gray-200 border border-white/10 rounded-lg text-sm transition-colors"
+                className="px-3 py-1.5 bg-white/10 hover:bg-white/15 text-gray-200 border border-white/10 rounded-lg text-sm transition-colors flex items-center gap-1.5"
               >
-                Clear
+                <X size={14} /> Clear
               </button>
-            </>
+            </div>
           )}
         </div>
-      </div>
+      )}
 
       {(error || actionError) && (
         <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
@@ -156,161 +191,44 @@ export default function TasksList() {
         </p>
       )}
 
-      {/* Tasks Table */}
+      {/* Cards */}
       {loading && tasks.length === 0 ? (
-        <div className="flex items-center justify-center py-12 glass-card rounded-2xl">
-          <p className="text-gray-400">Loading tasks...</p>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="glass-card rounded-2xl h-56 animate-pulse" />
+          ))}
         </div>
       ) : tasks.length === 0 ? (
-        <div className="flex items-center justify-center py-12 glass-card rounded-2xl">
-          <div className="text-center space-y-2">
-            <p className="text-gray-400">No tasks yet. Add your first task from the sidebar.</p>
-          </div>
+        <div className="glass-card rounded-2xl py-14 px-6 flex flex-col items-center text-center gap-4">
+          <p className="text-white text-lg font-semibold">No tasks yet</p>
+          <p className="text-gray-400 text-sm max-w-sm">Create your first task to start tracking status, priority and hours.</p>
+          <Link to="/tasks/add" className="btn-primary px-5 py-2.5"><Plus size={16} /> Add your first task</Link>
+        </div>
+      ) : visibleTasks.length === 0 ? (
+        <div className="glass-card rounded-2xl py-12 px-6 text-center">
+          <p className="text-gray-300">No tasks match your filters.</p>
+          <button
+            type="button"
+            onClick={() => { changeFilter('All'); setQuery(''); }}
+            className="mt-3 text-sm text-emerald-300 hover:text-emerald-200"
+          >
+            Clear filters
+          </button>
         </div>
       ) : (
-        <>
-          {/* Mobile list (small screens) */}
-          <div className="space-y-3 lg:hidden">
-            {tasks.map((task) => (
-              <div key={task.id} className="glass-card rounded-2xl p-4 flex flex-col">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <input
-                      type="checkbox"
-                      checked={selectedTasks.includes(task.id)}
-                      onChange={() => toggleTaskSelection(task.id)}
-                      className="rounded accent-emerald-500 cursor-pointer mt-1"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-white font-medium break-words">{task.title}</p>
-                      <p className="text-gray-300 text-sm break-words">{task.assignee}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => handleViewClick(task)}
-                      className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                      title="View"
-                    >
-                      <Eye size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleEditClick(task)}
-                      className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                      title="Edit"
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(task)}
-                      className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${getStatusColor(task.status)}`}>
-                    {task.status}
-                  </span>
-                  <span className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
-                    {task.priority}
-                  </span>
-                  <p className="text-gray-200 text-sm">{task.hoursLogged}/{task.estimatedHours}h</p>
-                  <p className="text-gray-300 text-sm">{formatDate(task.dueDate)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Desktop / tablet table (md+) */}
-          <div className="hidden lg:block overflow-x-auto glass-card rounded-2xl">
-            <table className="w-full">
-            <thead>
-              <tr className="bg-white/5 border-b border-white/10">
-                <th className="px-4 py-3 text-left">
-                  <input
-                    type="checkbox"
-                    checked={selectedTasks.length === tasks.length && tasks.length > 0}
-                    onChange={selectAllTasks}
-                    className="rounded accent-emerald-500 cursor-pointer"
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Title</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Assigned to</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Priority</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Hours</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Due Date</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-gray-300">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((task) => (
-                <tr key={task.id} className="border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors">
-                  <td className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedTasks.includes(task.id)}
-                      onChange={() => toggleTaskSelection(task.id)}
-                      className="rounded accent-emerald-500 cursor-pointer"
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-white font-medium">{task.title}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-gray-300 text-sm">{task.assignee || '—'}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${getStatusColor(task.status)}`}>
-                      {task.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-1 rounded text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
-                      {task.priority}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-gray-200 text-sm">{task.hoursLogged}/{task.estimatedHours}h</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-gray-300 text-sm">{formatDate(task.dueDate)}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => handleViewClick(task)}
-                        className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                        title="View"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleEditClick(task)}
-                        className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                        title="Edit"
-                      >
-                        <Edit2 size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(task)}
-                        className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        </>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleTasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              selected={selectedTasks.includes(task.id)}
+              onToggleSelect={() => toggleTaskSelection(task.id)}
+              onView={() => handleViewClick(task)}
+              onEdit={() => handleEditClick(task)}
+              onDelete={() => handleDeleteClick(task)}
+            />
+          ))}
+        </div>
       )}
 
       {/* Modals */}

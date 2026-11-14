@@ -19,6 +19,10 @@ app.use(
     optionsSuccessStatus: 200,
   })
 );
+// Stripe webhook needs the raw body to verify its signature, so it goes before express.json()
+import { handleStripeWebhook } from "./controllers/billing.controller.js";
+app.post("/api/billing/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
+
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
@@ -29,8 +33,12 @@ import indexRouter from "./routes/index.routes.js";
 import authRouter from "./routes/auth.routes.js";
 import taskRouter from "./routes/task.routes.js";
 import activityRouter from "./routes/activity.routes.js";
+import billingRouter from "./routes/billing.routes.js";
+import aiRouter from "./routes/ai.routes.js";
 
 app.use("/api", indexRouter);
+app.use("/api/billing", billingRouter);
+app.use("/api/ai", aiRouter);
 app.use("/api/users", authRouter);
 app.use("/api/tasks", taskRouter);
 app.use("/api/activities", activityRouter);

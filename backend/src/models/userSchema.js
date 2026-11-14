@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
+import { isPremiumUser, isComplimentary } from "../utils/premium.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -39,6 +40,19 @@ const userSchema = new mongoose.Schema(
       default: "",
       maxlength: 300,
     },
+    // Billing: "premium" unlocks the AI features. Kept in sync by the Stripe webhook.
+    plan: {
+      type: String,
+      enum: ["free", "premium"],
+      default: "free",
+    },
+    subscription: {
+      stripeCustomerId: { type: String, index: true },
+      stripeSubscriptionId: { type: String },
+      status: { type: String, default: "" }, // Stripe status: active, past_due, canceled...
+      currentPeriodEnd: { type: Date },
+      cancelAtPeriodEnd: { type: Boolean, default: false },
+    },
   },
   { timestamps: true }
 );
@@ -62,6 +76,14 @@ userSchema.methods.toJSON = function () {
   delete obj.passwordResetRequestedAt;
   delete obj.passwordChangedAt;
   delete obj.__v;
+  // Stripe ids stay on the server
+  if (obj.subscription) {
+    delete obj.subscription.stripeCustomerId;
+    delete obj.subscription.stripeSubscriptionId;
+  }
+  obj.isPremium = isPremiumUser(obj);
+  // Premium without a paid subscription (PREMIUM_EMAILS allowlist)
+  obj.complimentary = obj.plan !== "premium" && isComplimentary(obj);
   return obj;
 };
 
