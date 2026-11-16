@@ -19,9 +19,9 @@ app.use(
     optionsSuccessStatus: 200,
   })
 );
-// Stripe webhook needs the raw body to verify its signature, so it goes before express.json()
-import { handleStripeWebhook } from "./controllers/billing.controller.js";
-app.post("/api/billing/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
+// Paddle webhook needs the raw body to verify its signature, so it goes before express.json()
+import { handlePaddleWebhook } from "./controllers/billing.controller.js";
+app.post("/api/billing/webhook", express.raw({ type: "*/*" }), handlePaddleWebhook);
 
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));

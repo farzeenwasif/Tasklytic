@@ -2,45 +2,63 @@ import { useContext, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, CreditCard, Loader2, RotateCcw, Sparkles } from 'lucide-react'
 import { UserContext } from '../context/UserContext'
-import { getCard } from '../services/billingService'
+import { getCard, startCardUpdate } from '../services/billingService'
 import { getErrorMessage } from '../utils/apiClient'
-import UpdateCardModal from './UpdateCardModal'
+import { closeCheckout, openCheckout } from '../utils/paddle'
 
 const formatDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''
 
 // Premium subscription details on the Profile page. Cancel / resume happen in the app (no redirect).
 export default function SubscriptionCard({ welcome = '' }) {
-  const { user, isPremium, cancelSubscription, resumeSubscription } = useContext(UserContext)
+  const { user, isPremium, cancelSubscription, resumeSubscription, syncSubscription } = useContext(UserContext)
   const [busy, setBusy] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [msg, setMsg] = useState(welcome ? { type: 'success', text: welcome } : null)
 
   const [card, setCard] = useState(null) // { brand, last4, expMonth, expYear }
-  const [showCardForm, setShowCardForm] = useState(false)
 
   const sub = user?.subscription || {}
   const paid = isPremium && !user?.complimentary && Boolean(sub.status)
 
   // Card on file for renewals
-  useEffect(() => {
-    if (!paid) return
-    let cancelled = false
+  const loadCard = () =>
     getCard()
-      .then((d) => !cancelled && setCard(d.card))
+      .then((d) => setCard(d.card))
       .catch(() => { /* the card line just stays hidden */ })
-    return () => { cancelled = true }
+  useEffect(() => {
+    if (paid) loadCard()
   }, [paid])
 
   if (!isPremium) return null
 
-  const onCardSaved = ({ card: newCard, paymentRetry }) => {
-    if (newCard) setCard(newCard)
-    setMsg(
-      paymentRetry === 'failed'
-        ? { type: 'error', text: 'Card saved, but the overdue payment was declined on it. Please try another card.' }
-        : { type: 'success', text: paymentRetry === 'paid' ? 'Card updated and the overdue payment went through.' : 'Card updated. It will be used for your next renewal.' }
-    )
+  // Paddle's own secure form opens over the page; an overdue renewal is paid with the new card
+  const updateCard = async () => {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const { transactionId, pastDue } = await startCardUpdate()
+      await openCheckout(
+        { transactionId },
+        {
+          onCompleted: async () => {
+            try {
+              await syncSubscription()
+              await loadCard()
+            } catch { /* the webhook catches up */ }
+            closeCheckout()
+            setMsg({
+              type: 'success',
+              text: pastDue ? 'Card updated and the overdue payment went through.' : 'Card updated. It will be used for your next renewal.',
+            })
+          },
+        }
+      )
+    } catch (err) {
+      setMsg({ type: 'error', text: getErrorMessage(err, err.message || 'Could not open the card form') })
+    } finally {
+      setBusy(false)
+    }
   }
   const end = formatDate(sub.currentPeriodEnd)
 
@@ -92,7 +110,7 @@ export default function SubscriptionCard({ welcome = '' }) {
 
         {paid && (
           <div className='flex flex-col sm:flex-row gap-2 shrink-0'>
-          <button type='button' onClick={() => setShowCardForm(true)} disabled={busy} className='btn-ghost px-4 py-2 inline-flex items-center justify-center gap-2'>
+          <button type='button' onClick={updateCard} disabled={busy} className='btn-ghost px-4 py-2 inline-flex items-center justify-center gap-2'>
             <CreditCard size={16} /> Update card
           </button>
           {sub.cancelAtPeriodEnd ? (
@@ -127,8 +145,6 @@ export default function SubscriptionCard({ welcome = '' }) {
           {msg.text}
         </div>
       )}
-
-      {showCardForm && <UpdateCardModal onClose={() => setShowCardForm(false)} onDone={onCardSaved} />}
 
       {/* Rendered on <body>: the card's blur would otherwise trap a fixed overlay inside it */}
       {confirmCancel && createPortal(

@@ -9,5 +9,5 @@ const complimentaryEmails = () =>
 export const isComplimentary = (user) =>
   Boolean(user?.email) && complimentaryEmails().includes(String(user.email).toLowerCase());
 
-// Premium = a paid Stripe subscription, or a complimentary account
+// Premium = a paid (Paddle) subscription, or a complimentary account
 export const isPremiumUser = (user) => user?.plan === "premium" || isComplimentary(user);

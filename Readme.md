@@ -19,7 +19,7 @@ A full-stack task and hours dashboard. Plan tasks, log the hours you spend, and 
 | **Weekly AI insights** on the dashboard | | ✅ |
 | **Spoken daily briefing** of today's tasks when you log in | | ✅ |
 
-Payments are handled by **Stripe Checkout** (monthly subscription). Premium users manage or cancel the subscription from their **Profile** page, right in the app. Premium stays on until the end of the paid month.
+Payments are handled by **Paddle Billing** (monthly subscription, checkout opens inside the app). Premium users manage or cancel the subscription from their **Profile** page, right in the app. Premium stays on until the end of the paid month.
 
 ---
 
@@ -42,7 +42,7 @@ Payments are handled by **Stripe Checkout** (monthly subscription). Premium user
 | Frontend | React 19, Vite 7, React Router 7, Tailwind CSS 4, Motion, Three.js (landing hero), lucide-react |
 | Backend | Node.js, Express 5, Mongoose 8 (MongoDB) |
 | Auth | JWT, bcrypt |
-| Payments | Stripe (embedded Checkout, subscriptions API, webhooks) |
+| Payments | Paddle Billing (Paddle.js overlay checkout, REST API, webhooks) |
 | AI | Built-in AI assistant (server-side) |
 | Files & email | Cloudinary, Nodemailer (SMTP) |
 
@@ -58,7 +58,7 @@ Tasklytic/
 │       ├── middlewares/   auth (JWT), premium + AI rate limit, multer
 │       ├── models/        User, Tasks, Activity
 │       ├── routes/
-│       └── utils/         stripe, ai, premium, cloudinary, email, ...
+│       └── utils/         paddle, ai, premium, cloudinary, email, ...
 └── frontend/         React app (Vite)
     └── src/
         ├── pages/         Landing, Login, Signup, Dashboard, Tasks, AddTask, Profile, Billing, ...
@@ -131,20 +131,22 @@ See [`backend/.env.example`](backend/.env.example) for a template.
 | `PORT` | | API port (default `8000`) |
 | `MONGO_URI` | ✅ | MongoDB connection string |
 | `CORS_ORIGIN` | ✅ | Allowed frontend origin(s), comma-separated |
-| `FRONTEND_URL` | | Base URL for email links and Stripe redirects (defaults to the first `CORS_ORIGIN`) |
+| `FRONTEND_URL` | | Base URL for email links (defaults to the first `CORS_ORIGIN`) |
 | `ACCESS_TOKEN_SECRET` | ✅ | Long random string used to sign JWTs |
 | `ACCESS_TOKEN_EXPIRY` | | JWT lifetime (default `1d`) |
 | `CLOUD_NAME`, `API_KEY`, `API_SECRET` | ✅ | Cloudinary credentials for profile photos |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | prod | Email for password reset (printed to the console when empty in development) |
-| `STRIPE_SECRET_KEY` | Premium | Stripe secret key (`sk_test_...` / `sk_live_...`) |
-| `STRIPE_PRICE_ID` | Premium | ID of the $20/month recurring price (`price_...`) |
-| `STRIPE_WEBHOOK_SECRET` | Premium | Signing secret of the webhook endpoint (`whsec_...`) |
+| `PADDLE_ENV` | Premium | `sandbox` (default) or `production` |
+| `PADDLE_API_KEY` | Premium | Paddle API key (server only) |
+| `PADDLE_CLIENT_TOKEN` | Premium | Paddle client-side token (`test_...` / `live_...`), sent to the browser for the checkout |
+| `PADDLE_PRICE_ID` | Premium | ID of the $20/month recurring price (`pri_...`) |
+| `PADDLE_WEBHOOK_SECRET` | Premium | Secret key of the notification destination (`pdl_ntfset_...`) |
 | `AI_API_KEY` | Premium | API key for the AI assistant (from Google AI Studio) |
 | `AI_MODEL` | | Optional model override |
 | `PREMIUM_EMAILS` | | Comma-separated emails that get Premium for free (owner, testers) |
 | `AI_RATE_LIMIT` | | Max AI requests per user per 10 minutes (default `40`) |
 
-Without the Stripe or AI keys the app still runs. The upgrade and AI endpoints return a clear "not configured" error.
+Without the Paddle or AI keys the app still runs. The upgrade and AI endpoints return a clear "not configured" error.
 
 ### Frontend (`frontend/.env`)
 
@@ -156,26 +158,22 @@ Without the Stripe or AI keys the app still runs. The upgrade and AI endpoints r
 
 ## Setting up Premium
 
-### Stripe
+### Paddle
 
-1. In the [Stripe Dashboard](https://dashboard.stripe.com) (start in **test mode**), create a product **Tasklytic Premium** with a **recurring price of $20 / month**. Copy its price ID into `STRIPE_PRICE_ID`.
-2. Copy your secret key into `STRIPE_SECRET_KEY`.
-3. Add a webhook endpoint at `https://<your-api>/api/billing/webhook` with these events:
-   - `checkout.session.completed`
-   - `customer.subscription.created`
-   - `customer.subscription.updated`
-   - `customer.subscription.deleted`
+Start in the **sandbox** (https://sandbox-vendors.paddle.com); it needs no business verification.
 
-   Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+1. **Catalog > Products**: create **Tasklytic Premium** with a **recurring price of $20 / month**. Copy the price ID (`pri_...`) into `PADDLE_PRICE_ID`.
+2. **Developer tools > Authentication**: create an **API key** (`PADDLE_API_KEY`) and a **client-side token** (`PADDLE_CLIENT_TOKEN`).
+3. **Checkout > Checkout settings**: set the **default payment link** to your frontend URL (Paddle requires one before checkout opens), and in sandbox add your domain to the approved list if asked.
+4. **Developer tools > Notifications > New destination**: URL `https://<your-api>/api/billing/webhook`, with these events:
+   - `subscription.created`, `subscription.updated`, `subscription.activated`, `subscription.canceled`, `subscription.past_due`, `subscription.paused`, `subscription.resumed`
+   - `transaction.completed`, `transaction.past_due`, `transaction.payment_failed`
 
-**Local testing** with the [Stripe CLI](https://docs.stripe.com/stripe-cli):
+   Copy the destination's secret key (`pdl_ntfset_...`) into `PADDLE_WEBHOOK_SECRET`.
 
-```bash
-stripe listen --forward-to localhost:8000/api/billing/webhook
-# use the printed whsec_... as STRIPE_WEBHOOK_SECRET
-```
+Sandbox test card: `4242 4242 4242 4242`, any future expiry date, CVC `100`.
 
-Pay with the test card `4242 4242 4242 4242`, any future expiry date, and any CVC.
+To go live: repeat the steps in the live dashboard (https://vendors.paddle.com) after Paddle approves your account, and set `PADDLE_ENV=production`.
 
 ### AI assistant
 
@@ -187,7 +185,7 @@ Create an API key in [Google AI Studio](https://aistudio.google.com/apikey) and 
 
 ## API reference
 
-All routes except register, login, password reset and the Stripe webhook need `Authorization: Bearer <token>`.
+All routes except register, login, password reset, the help form and the Paddle webhook need `Authorization: Bearer <token>`.
 
 ### Auth & profile (`/api/users`)
 
@@ -244,14 +242,13 @@ Focus-timer sessions and manual time corrections are kept as time entries, which
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/checkout` | Start a Premium checkout, returns `{ url }` |
+| GET | `/config` | What the browser needs to open Paddle's checkout: `{ environment, clientToken, priceId }` |
+| POST | `/sync` | `{ transactionId? }` → re-read the subscription from Paddle, returns the user |
 | POST | `/cancel` | Cancel at the end of the paid month, returns the user |
 | POST | `/resume` | Undo a pending cancellation, returns the user |
-| GET | `/card` | Card on file, returns `{ card }` |
-| POST | `/card/setup` | Start an in-app card update, returns `{ client_secret }` |
-| POST | `/card` | Save the confirmed card as default (retries a failed payment) |
-| POST | `/sync` | Re-read the subscription from Stripe |
-| POST | `/webhook` | Stripe webhook (signature verified, no JWT) |
+| GET | `/card` | Card used for the latest payment, returns `{ card }` |
+| POST | `/card/update` | Transaction for Paddle's update-card checkout (also pays an overdue renewal) |
+| POST | `/webhook` | Paddle webhook (signature verified, no JWT) |
 
 ### AI (`/api/ai`): Premium only, rate limited
 
@@ -280,12 +277,12 @@ Focus-timer sessions and manual time corrections are kept as time entries, which
 **Backend (Render, Railway or similar)**
 - Root directory: `backend`. Start command: `npm start`.
 - Set every variable from the backend table. `CORS_ORIGIN` and `FRONTEND_URL` must be the deployed frontend URL.
-- In Stripe, point the webhook at `https://<backend>/api/billing/webhook` and use **live** keys when you go live.
+- In Paddle, point the notification destination at `https://<backend>/api/billing/webhook`, and use the **live** dashboard's keys when you go live.
 
 **Checklist before going live**
 - [ ] `ACCESS_TOKEN_SECRET` is a long random value
 - [ ] SMTP is configured so password reset emails are delivered
-- [ ] Stripe live keys, live price ID and live webhook secret are set
+- [ ] Paddle live API key, client token, price ID and webhook secret are set, and `PADDLE_ENV=production`
 - [ ] `AI_API_KEY` is set, and billing or quota is enabled on the Google side
 
 ---

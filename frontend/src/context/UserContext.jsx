@@ -95,9 +95,9 @@ export function UserProvider({ children }) {
     [setUser]
   );
 
-  // After Stripe checkout: pull the latest plan from Stripe
-  const syncSubscription = useCallback(async () => {
-    const u = await billingApi.syncSubscription();
+  // After Paddle checkout (or a card update): pull the latest plan from Paddle
+  const syncSubscription = useCallback(async (transactionId) => {
+    const u = await billingApi.syncSubscription(transactionId);
     setUser(u);
     return u;
   }, [setUser]);
@@ -113,13 +113,6 @@ export function UserProvider({ children }) {
     const u = await billingApi.resumeSubscription();
     setUser(u);
     return u;
-  }, [setUser]);
-
-  // After the in-app card form: save the new card (may also settle a failed payment)
-  const saveCard = useCallback(async (setupIntentId) => {
-    const result = await billingApi.saveCard(setupIntentId);
-    setUser(result.user);
-    return result;
   }, [setUser]);
 
   const removeAvatar = useCallback(async () => {
@@ -143,7 +136,6 @@ export function UserProvider({ children }) {
         syncSubscription,
         cancelSubscription,
         resumeSubscription,
-        saveCard,
         isPremium: !!user?.isPremium,
       }}
     >

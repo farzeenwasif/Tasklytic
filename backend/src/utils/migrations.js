@@ -1,4 +1,5 @@
 import Tasks, { LEGACY_STATUS_MAP } from "../models/tasksSchema.js";
+import User from "../models/userSchema.js";
 
 // Runs once at startup, after the DB connects. Safe to run every time: each step
 // only touches documents that are still in the old shape.
@@ -16,4 +17,15 @@ export const runMigrations = async () => {
     { $set: { completedAt: "$updatedAt" } },
   ]);
   if (renamed) console.log(`Migrated ${renamed} task(s) to the new statuses`);
+
+  // Payments moved from Stripe (test mode) to Paddle: old Stripe test subscriptions no longer
+  // exist for the app, so those accounts go back to Free (complimentary accounts are unaffected)
+  const stripeUsers = await User.collection.updateMany(
+    { "subscription.stripeSubscriptionId": { $exists: true } },
+    {
+      $set: { plan: "free", "subscription.status": "", "subscription.cancelAtPeriodEnd": false },
+      $unset: { "subscription.stripeCustomerId": "", "subscription.stripeSubscriptionId": "", "subscription.currentPeriodEnd": "" },
+    }
+  );
+  if (stripeUsers.modifiedCount) console.log(`Cleared ${stripeUsers.modifiedCount} old Stripe subscription(s)`);
 };

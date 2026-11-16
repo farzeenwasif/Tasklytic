@@ -3,180 +3,103 @@ import { ApiResponse } from "../utils/apiResponse.js";
 import { ApiError } from "../utils/apiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { logActivity } from "../utils/logActivity.js";
-import { getFrontendUrl } from "../utils/frontendUrl.js";
-import { getStripe, applySubscriptionToUser } from "../utils/stripe.js";
 import { isPremiumUser } from "../utils/premium.js";
+import {
+  applySubscriptionToUser,
+  isPaddleConfigured,
+  paddleApi,
+  paddleEnvironment,
+  verifyWebhook,
+} from "../utils/paddle.js";
 
-// Stripe customer for this user, created on first checkout.
-// Two checkout requests can arrive at the same time (e.g. a double click), so:
-// - the idempotency key makes Stripe return the SAME customer for both calls
-// - the conditional update only stores an id if none is stored yet
-const ensureCustomer = async (stripe, user) => {
-  if (user.subscription?.stripeCustomerId) return user.subscription.stripeCustomerId;
+// Payments run on Paddle Billing. Checkout and card updates open Paddle's overlay inside the app
+// (Paddle.js); cancel / resume happen through the API. The webhook keeps the plan in sync.
 
-  const customer = await stripe.customers.create(
-    { email: user.email, name: user.name, metadata: { userId: String(user._id) } },
-    { idempotencyKey: `tasklytic-customer-${user._id}` }
+const ok = (res, data, message = "OK") => res.status(200).json(new ApiResponse(200, data, message));
+
+// Log the plan change when Premium switches on or off
+const logPlanChange = async (user, wasPremium) => {
+  const isNow = user.plan === "premium";
+  if (wasPremium === isNow) return;
+  await logActivity(
+    user._id,
+    isNow ? "plan_upgraded" : "plan_downgraded",
+    isNow ? "Upgraded to Premium" : "Premium ended, back on the Free plan"
   );
-
-  const saved = await User.findOneAndUpdate(
-    { _id: user._id, "subscription.stripeCustomerId": { $in: [null, ""] } },
-    { $set: { "subscription.stripeCustomerId": customer.id } },
-    { new: true }
-  );
-  if (saved) return customer.id;
-
-  // Another request stored a customer first: use that one
-  const fresh = await User.findById(user._id);
-  return fresh.subscription?.stripeCustomerId || customer.id;
 };
 
-// The user's most recent subscription: by stored customer, then by the userId we put in metadata
-// (covers payments made under a different customer)
-const findLatestSubscription = async (stripe, user) => {
-  const customer = user.subscription?.stripeCustomerId;
-  if (customer) {
-    const { data } = await stripe.subscriptions.list({ customer, status: "all", limit: 1 });
-    if (data[0]) return data[0];
+// The user's most recent Paddle subscription: the stored one, else found through their Paddle customer
+const findSubscription = async (user) => {
+  if (user.subscription?.subscriptionId) {
+    return paddleApi("GET", `/subscriptions/${encodeURIComponent(user.subscription.subscriptionId)}`);
   }
-  const { data } = await stripe.subscriptions.search({
-    query: `metadata['userId']:'${String(user._id)}'`,
-    limit: 10,
-  });
-  return data.sort((a, b) => b.created - a.created)[0] || null;
+  let customerId = user.subscription?.customerId;
+  if (!customerId) {
+    const customers = await paddleApi("GET", `/customers?email=${encodeURIComponent(user.email)}`);
+    customerId = customers?.[0]?.id;
+  }
+  if (!customerId) return null;
+  const subs = await paddleApi("GET", `/subscriptions?customer_id=${encodeURIComponent(customerId)}&order_by=id[DESC]`);
+  // only subscriptions made for this account (checkout passes our user id as custom data)
+  return (subs || []).find((s) => !s.custom_data?.userId || s.custom_data.userId === String(user._id)) || null;
 };
 
-// Start a $20/month Premium checkout. Returns a client_secret for the embedded
-// Stripe payment form (ui_mode "form") that the Billing page renders.
-export const createCheckoutSession = asyncHandler(async (req, res) => {
-  const stripe = getStripe();
-  if (!process.env.STRIPE_PRICE_ID) throw new ApiError(503, "Premium price is not configured");
-
-  const user = await User.findById(req.user._id);
-  if (isPremiumUser(user)) throw new ApiError(400, "You already have Premium");
-
-  const customer = await ensureCustomer(stripe, user);
-  const frontend = getFrontendUrl();
-  const session = await stripe.checkout.sessions.create({
-    // Configured in Stripe Checkout Studio
-    ui_mode: "form",
-    billing_address_collection: "auto",
-    phone_number_collection: { enabled: false },
-    automatic_tax: { enabled: false },
-    payment_method_collection: "always",
-    submit_type: "auto",
-    integration_identifier: "custom_embedded_web_0001",
-
-    mode: "subscription",
-    line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
-
-    // Links the payment to this user so the webhook can switch on Premium
-    customer,
-    client_reference_id: String(user._id),
-    subscription_data: { metadata: { userId: String(user._id) } },
-
-    // Where Stripe sends the user after the embedded form confirms
-    return_url: `${frontend}/billing?status=success`,
+// What the browser needs to open Paddle's checkout overlay (the client-side token is public)
+export const getCheckoutConfig = asyncHandler(async (req, res) => {
+  if (!isPaddleConfigured() || !process.env.PADDLE_CLIENT_TOKEN || !process.env.PADDLE_PRICE_ID) {
+    throw new ApiError(503, "Payments are not configured on the server");
+  }
+  return ok(res, {
+    environment: paddleEnvironment(),
+    clientToken: process.env.PADDLE_CLIENT_TOKEN,
+    priceId: process.env.PADDLE_PRICE_ID,
+    email: req.user.email,
+    userId: String(req.user._id),
+    alreadyPremium: isPremiumUser(req.user),
   });
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, { client_secret: session.client_secret }, "Checkout started"));
 });
 
-// Re-read the subscription from Stripe. Called after checkout so Premium shows up
-// right away even if the webhook hasn't arrived yet.
+// Re-read the subscription from Paddle. Called after checkout (with its transaction id) so Premium
+// shows up right away, before the webhook arrives, and after a card update.
 export const syncSubscription = asyncHandler(async (req, res) => {
-  const stripe = getStripe();
   const user = await User.findById(req.user._id);
-  const sub = await findLatestSubscription(stripe, user);
+  let sub = null;
+
+  const transactionId = req.body?.transactionId;
+  if (transactionId) {
+    if (!/^txn_[a-z0-9]+$/i.test(transactionId)) throw new ApiError(400, "Invalid transaction id");
+    const txn = await paddleApi("GET", `/transactions/${transactionId}`);
+    if (txn.custom_data?.userId && txn.custom_data.userId !== String(user._id)) {
+      throw new ApiError(403, "This payment belongs to another account");
+    }
+    if (txn.subscription_id) sub = await paddleApi("GET", `/subscriptions/${txn.subscription_id}`);
+  }
+  if (!sub) sub = await findSubscription(user);
 
   if (sub) {
     const wasPremium = user.plan === "premium";
     applySubscriptionToUser(user, sub);
     await user.save();
-    if (!wasPremium && user.plan === "premium") {
-      await logActivity(user._id, "plan_upgraded", "Upgraded to Premium");
-    }
+    await logPlanChange(user, wasPremium);
   }
-  return res.status(200).json(new ApiResponse(200, user, "Subscription synced"));
+  return ok(res, user, "Subscription synced");
 });
 
-// Stripe webhook: the source of truth for plan changes (renewals, cancellations, failed payments).
-// Mounted with express.raw() so the signature can be verified against the exact body.
-export const handleStripeWebhook = async (req, res) => {
-  let event;
-  try {
-    if (!process.env.STRIPE_WEBHOOK_SECRET) throw new Error("STRIPE_WEBHOOK_SECRET is not set");
-    event = getStripe().webhooks.constructEvent(
-      req.body,
-      req.headers["stripe-signature"],
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-  } catch (err) {
-    console.error("Stripe webhook rejected:", err.message);
-    return res.status(400).send(`Webhook error: ${err.message}`);
-  }
-
-  try {
-    let sub = null;
-    if (event.type === "checkout.session.completed" && event.data.object.subscription) {
-      sub = await getStripe().subscriptions.retrieve(event.data.object.subscription);
-    } else if (
-      ["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"].includes(event.type)
-    ) {
-      sub = event.data.object;
-    }
-
-    if (sub) {
-      const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
-      const user =
-        (sub.metadata?.userId && (await User.findById(sub.metadata.userId))) ||
-        (await User.findOne({ "subscription.stripeCustomerId": customerId }));
-
-      // Ignore late events about an older subscription once a newer one is active
-      const isOlderSub =
-        user?.subscription?.stripeSubscriptionId &&
-        user.subscription.stripeSubscriptionId !== sub.id &&
-        user.plan === "premium";
-
-      if (user && !isOlderSub) {
-        const wasPremium = user.plan === "premium";
-        applySubscriptionToUser(user, sub);
-        await user.save();
-        if (wasPremium !== (user.plan === "premium")) {
-          await logActivity(
-            user._id,
-            user.plan === "premium" ? "plan_upgraded" : "plan_downgraded",
-            user.plan === "premium" ? "Upgraded to Premium" : "Premium ended, back on the Free plan"
-          );
-        }
-      }
-    }
-    return res.json({ received: true });
-  } catch (err) {
-    // 500 makes Stripe retry later
-    console.error("Stripe webhook failed:", err);
-    return res.status(500).json({ received: false });
-  }
-};
-
-// Turn auto-renew off or back on. Premium stays until the end of the paid period either way;
-// the webhook (customer.subscription.deleted) switches the plan to Free when the period ends.
+// Cancel at the end of the paid month, or undo that. Premium stays until the period ends;
+// the webhook (subscription.canceled) switches the plan to Free when it does.
 const setCancelAtPeriodEnd = (cancel) =>
   asyncHandler(async (req, res) => {
-    const stripe = getStripe();
     const user = await User.findById(req.user._id);
+    let sub = await findSubscription(user);
+    if (!sub || sub.status === "canceled") throw new ApiError(400, "No active subscription to change");
 
-    let sub = user.subscription?.stripeSubscriptionId
-      ? await stripe.subscriptions.retrieve(user.subscription.stripeSubscriptionId)
-      : await findLatestSubscription(stripe, user);
-    if (!sub || ["canceled", "incomplete_expired"].includes(sub.status)) {
-      throw new ApiError(400, "No active subscription to change");
+    const scheduledCancel = sub.scheduled_change?.action === "cancel";
+    if (cancel && !scheduledCancel) {
+      sub = await paddleApi("POST", `/subscriptions/${sub.id}/cancel`, { effective_from: "next_billing_period" });
+    } else if (!cancel && scheduledCancel) {
+      sub = await paddleApi("PATCH", `/subscriptions/${sub.id}`, { scheduled_change: null });
     }
-
-    if (Boolean(sub.cancel_at_period_end) !== cancel) {
-      sub = await stripe.subscriptions.update(sub.id, { cancel_at_period_end: cancel });
+    if (cancel !== scheduledCancel) {
       await logActivity(
         user._id,
         cancel ? "subscription_cancelled" : "subscription_resumed",
@@ -186,100 +109,84 @@ const setCancelAtPeriodEnd = (cancel) =>
 
     applySubscriptionToUser(user, sub);
     await user.save();
-    return res
-      .status(200)
-      .json(new ApiResponse(200, user, cancel ? "Subscription cancelled" : "Subscription resumed"));
+    return ok(res, user, cancel ? "Subscription cancelled" : "Subscription resumed");
   });
 
 export const cancelSubscription = setCancelAtPeriodEnd(true);
 export const resumeSubscription = setCancelAtPeriodEnd(false);
 
-// ---- Card on file (updated in the app with a SetupIntent; nothing is charged) ----
+// ---- Card on file ----
 
-const cardSummary = (pm) =>
-  pm?.card
-    ? { brand: pm.card.brand, last4: pm.card.last4, expMonth: pm.card.exp_month, expYear: pm.card.exp_year }
-    : null;
-
-// The card Stripe charges for renewals: the subscription's own default, else the customer's
-const getDefaultCard = async (stripe, user) => {
-  const customerId = user.subscription?.stripeCustomerId;
-  if (!customerId) return null;
-  const subId = user.subscription?.stripeSubscriptionId;
-  if (subId) {
-    const sub = await stripe.subscriptions.retrieve(subId, { expand: ["default_payment_method"] });
-    if (sub.default_payment_method?.card) return cardSummary(sub.default_payment_method);
-  }
-  const customer = await stripe.customers.retrieve(customerId, {
-    expand: ["invoice_settings.default_payment_method"],
-  });
-  return cardSummary(customer.invoice_settings?.default_payment_method);
+const cardFrom = (txn) => {
+  const payments = txn?.payments || [];
+  const paid = payments.find((p) => p.status === "captured" && p.method_details?.card) || payments.find((p) => p.method_details?.card);
+  const card = paid?.method_details?.card;
+  return card ? { brand: card.type, last4: card.last4, expMonth: card.expiry_month, expYear: card.expiry_year } : null;
 };
 
+// The card used for the latest successful payment of the subscription
 export const getPaymentMethod = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
-  const card = await getDefaultCard(getStripe(), user);
-  return res.status(200).json(new ApiResponse(200, { card }, "Card loaded"));
+  const subId = req.user.subscription?.subscriptionId;
+  if (!subId) return ok(res, { card: null });
+  const txns = await paddleApi(
+    "GET",
+    `/transactions?subscription_id=${encodeURIComponent(subId)}&status=completed&order_by=billed_at[DESC]&per_page=5`
+  );
+  const card = (txns || []).map(cardFrom).find(Boolean) || null;
+  return ok(res, { card }, "Card loaded");
 });
 
-// Step 1: a SetupIntent the in-app card form confirms
-export const createCardSetup = asyncHandler(async (req, res) => {
-  const stripe = getStripe();
-  const customer = req.user.subscription?.stripeCustomerId;
-  if (!customer) throw new ApiError(400, "No subscription found for this account");
-
-  const intent = await stripe.setupIntents.create({
-    customer,
-    usage: "off_session",
-    metadata: { userId: String(req.user._id) },
-  });
-  return res
-    .status(200)
-    .json(new ApiResponse(200, { client_secret: intent.client_secret }, "Card form ready"));
+// A transaction for Paddle's "update payment method" checkout. For an overdue subscription it is the
+// unpaid renewal, so entering a new card also pays what is due.
+export const createCardUpdate = asyncHandler(async (req, res) => {
+  const subId = req.user.subscription?.subscriptionId;
+  if (!subId) throw new ApiError(400, "No subscription found for this account");
+  const txn = await paddleApi("GET", `/subscriptions/${encodeURIComponent(subId)}/update-payment-method-transaction`);
+  return ok(res, { transactionId: txn.id, pastDue: txn.status === "past_due" }, "Card update ready");
 });
 
-// Step 2: after the form confirms, make the new card the default for renewals.
-// If the last payment failed (past_due), retry that invoice with the new card right away.
-export const saveCard = asyncHandler(async (req, res) => {
-  const stripe = getStripe();
-  const { setupIntentId } = req.body || {};
-  if (!setupIntentId || typeof setupIntentId !== "string") throw new ApiError(400, "setupIntentId is required");
-
-  const user = await User.findById(req.user._id);
-  const customerId = user.subscription?.stripeCustomerId;
-  const intent = await stripe.setupIntents.retrieve(setupIntentId);
-  const intentCustomer = typeof intent.customer === "string" ? intent.customer : intent.customer?.id;
-  if (!customerId || intentCustomer !== customerId) throw new ApiError(403, "This card setup does not belong to you");
-  if (intent.status !== "succeeded") throw new ApiError(400, "The card has not been confirmed yet");
-
-  const pmId = typeof intent.payment_method === "string" ? intent.payment_method : intent.payment_method?.id;
-  await stripe.customers.update(customerId, { invoice_settings: { default_payment_method: pmId } });
-
-  let paymentRetry = null; // "paid" | "failed" | null (nothing was due)
-  const subId = user.subscription?.stripeSubscriptionId;
-  if (subId) {
-    let sub = await stripe.subscriptions.update(subId, { default_payment_method: pmId });
-
-    const invoiceId = typeof sub.latest_invoice === "string" ? sub.latest_invoice : sub.latest_invoice?.id;
-    if (sub.status === "past_due" && invoiceId) {
-      const invoice = await stripe.invoices.retrieve(invoiceId);
-      if (invoice.status === "open") {
-        try {
-          await stripe.invoices.pay(invoiceId, { payment_method: pmId });
-          paymentRetry = "paid";
-        } catch (err) {
-          console.error("Retrying the failed invoice did not work:", err.message);
-          paymentRetry = "failed";
-        }
-        sub = await stripe.subscriptions.retrieve(subId);
-      }
-    }
-    applySubscriptionToUser(user, sub);
-    await user.save();
+// ---- Webhook: the source of truth for renewals, cancellations and failed payments ----
+// Mounted with express.raw() so the signature is checked against the exact body.
+export const handlePaddleWebhook = async (req, res) => {
+  let event;
+  try {
+    const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : String(req.body || "");
+    event = verifyWebhook(raw, req.headers["paddle-signature"], process.env.PADDLE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error("Paddle webhook rejected:", err.message);
+    return res.status(400).send(`Webhook error: ${err.message}`);
   }
 
-  const pm = await stripe.paymentMethods.retrieve(pmId);
-  return res
-    .status(200)
-    .json(new ApiResponse(200, { user, card: cardSummary(pm), paymentRetry }, "Card updated"));
-});
+  try {
+    let sub = null;
+    const type = String(event.event_type || "");
+    if (type.startsWith("subscription.")) {
+      sub = event.data;
+    } else if (["transaction.completed", "transaction.past_due", "transaction.payment_failed"].includes(type) && event.data?.subscription_id) {
+      sub = await paddleApi("GET", `/subscriptions/${event.data.subscription_id}`);
+    }
+
+    if (sub?.id) {
+      const userId = sub.custom_data?.userId;
+      const user =
+        (userId && /^[a-f0-9]{24}$/i.test(userId) && (await User.findById(userId))) ||
+        (await User.findOne({ "subscription.customerId": sub.customer_id }));
+
+      // Ignore late events about an older subscription once a newer one is active
+      const isOlderSub =
+        user?.subscription?.subscriptionId && user.subscription.subscriptionId !== sub.id && user.plan === "premium";
+
+      if (user && !isOlderSub) {
+        const wasPremium = user.plan === "premium";
+        applySubscriptionToUser(user, sub);
+        await user.save();
+        await logPlanChange(user, wasPremium);
+      }
+    }
+    return res.json({ received: true });
+  } catch (err) {
+    // a non-2xx response makes Paddle retry later
+    console.error("Paddle webhook failed:", err);
+    return res.status(500).json({ received: false });
+  }
+};

@@ -1,4 +1,4 @@
-// Shown on the landing page and the billing page. The real price lives in Stripe (STRIPE_PRICE_ID).
+// Shown on the landing page and the billing page. The real price lives in Paddle (PADDLE_PRICE_ID).
 export const PLANS = [
   {
     id: 'free',

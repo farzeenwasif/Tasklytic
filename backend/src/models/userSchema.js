@@ -40,16 +40,17 @@ const userSchema = new mongoose.Schema(
       default: "",
       maxlength: 300,
     },
-    // Billing: "premium" unlocks the AI features. Kept in sync by the Stripe webhook.
+    // Billing: "premium" unlocks the AI features. Kept in sync by the Paddle webhook.
     plan: {
       type: String,
       enum: ["free", "premium"],
       default: "free",
     },
     subscription: {
-      stripeCustomerId: { type: String, index: true },
-      stripeSubscriptionId: { type: String },
-      status: { type: String, default: "" }, // Stripe status: active, past_due, canceled...
+      provider: { type: String, default: "" }, // "paddle"
+      customerId: { type: String, index: true }, // Paddle ctm_...
+      subscriptionId: { type: String }, // Paddle sub_...
+      status: { type: String, default: "" }, // active, past_due, canceled...
       currentPeriodEnd: { type: Date },
       cancelAtPeriodEnd: { type: Boolean, default: false },
     },
@@ -76,8 +77,10 @@ userSchema.methods.toJSON = function () {
   delete obj.passwordResetRequestedAt;
   delete obj.passwordChangedAt;
   delete obj.__v;
-  // Stripe ids stay on the server
+  // Payment provider ids stay on the server
   if (obj.subscription) {
+    delete obj.subscription.customerId;
+    delete obj.subscription.subscriptionId;
     delete obj.subscription.stripeCustomerId;
     delete obj.subscription.stripeSubscriptionId;
   }
