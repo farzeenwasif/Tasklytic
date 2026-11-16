@@ -5,6 +5,9 @@ import TasksManagement from '../pages/TasksManagement'
 import AddTask from '../pages/AddTask'
 import Profile from '../pages/Profile'
 import Billing from '../pages/Billing'
+import Plan from '../pages/Plan'
+import Finance from '../pages/Finance'
+import Help from '../pages/Help'
 import Login from '../pages/Login'
 import Signup from '../pages/Signup'
 import ForgotPassword from '../pages/ForgotPassword'
@@ -31,6 +34,9 @@ export default function Router() {
         <Route path="/tasks/add" element={<AddTask/>} />
         <Route path="/profile" element={<Profile/>} />
         <Route path="/billing" element={<Billing/>} />
+        <Route path="/today" element={<Plan/>} />
+        <Route path="/finance" element={<Finance/>} />
+        <Route path="/help" element={<Help/>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

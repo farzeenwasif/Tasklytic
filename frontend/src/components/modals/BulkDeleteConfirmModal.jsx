@@ -22,8 +22,8 @@ export default function BulkDeleteConfirmModal({ isOpen, count, totalHours, onCl
             Are you sure you want to delete <span className="font-semibold text-red-400">{count} task{count !== 1 ? 's' : ''}</span>?
           </p>
           <div className="bg-white/5 border border-white/10 p-3 rounded-lg">
-            <p className="text-gray-400 text-sm">Total Hours Logged</p>
-            <p className="text-red-400 font-bold text-lg">{totalHours.toFixed(1)}h</p>
+            <p className="text-gray-400 text-sm">Time spent on them</p>
+            <p className="text-red-400 font-bold text-lg">{totalHours}</p>
           </div>
           <p className="text-gray-400 text-sm">This action cannot be undone.</p>
         </div>

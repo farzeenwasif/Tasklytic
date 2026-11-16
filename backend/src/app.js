@@ -35,6 +35,7 @@ import taskRouter from "./routes/task.routes.js";
 import activityRouter from "./routes/activity.routes.js";
 import billingRouter from "./routes/billing.routes.js";
 import aiRouter from "./routes/ai.routes.js";
+import financeRouter from "./routes/finance.routes.js";
 
 app.use("/api", indexRouter);
 app.use("/api/billing", billingRouter);
@@ -42,6 +43,7 @@ app.use("/api/ai", aiRouter);
 app.use("/api/users", authRouter);
 app.use("/api/tasks", taskRouter);
 app.use("/api/activities", activityRouter);
+app.use("/api/finance", financeRouter);
 
 // 404 for unknown API routes
 app.use((req, res, next) => {

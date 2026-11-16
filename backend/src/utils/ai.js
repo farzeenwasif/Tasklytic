@@ -58,7 +58,13 @@ const callModel = async (prompt, config) => {
   throw new ApiError(502, "The AI service is busy right now. Please try again in a moment.");
 };
 
-// Structured output: the model must answer with JSON matching `schema`
+// Text plus one image (base64) as the model input
+export const withImage = (prompt, image) => [
+  { role: "user", parts: [{ inlineData: { mimeType: image.mimeType, data: image.data } }, { text: prompt }] },
+];
+
+// Structured output: the model must answer with JSON matching `schema`.
+// `prompt` is a string, or the contents from withImage().
 export const generateJSON = async (prompt, schema) => {
   const text = await callModel(prompt, {
     responseMimeType: "application/json",

@@ -19,7 +19,7 @@ A full-stack task and hours dashboard. Plan tasks, log the hours you spend, and 
 | **Weekly AI insights** on the dashboard | | ✅ |
 | **Spoken daily briefing** of today's tasks when you log in | | ✅ |
 
-Payments are handled by **Stripe Checkout** (monthly subscription). Users manage or cancel the subscription in the **Stripe Customer Portal**. Premium stays on until the end of the paid month.
+Payments are handled by **Stripe Checkout** (monthly subscription). Premium users manage or cancel the subscription from their **Profile** page, right in the app. Premium stays on until the end of the paid month.
 
 ---
 
@@ -42,7 +42,7 @@ Payments are handled by **Stripe Checkout** (monthly subscription). Users manage
 | Frontend | React 19, Vite 7, React Router 7, Tailwind CSS 4, Motion, Three.js (landing hero), lucide-react |
 | Backend | Node.js, Express 5, Mongoose 8 (MongoDB) |
 | Auth | JWT, bcrypt |
-| Payments | Stripe (Checkout, Customer Portal, webhooks) |
+| Payments | Stripe (embedded Checkout, subscriptions API, webhooks) |
 | AI | Built-in AI assistant (server-side) |
 | Files & email | Cloudinary, Nodemailer (SMTP) |
 
@@ -99,6 +99,27 @@ npm run dev               # http://localhost:5173
 
 ---
 
+## Running with Docker
+
+Requires Docker Desktop. Fill in `backend/.env` (see `backend/.env.example`) and `frontend/.env` first.
+
+```bash
+docker compose up --build -d
+```
+
+- Web app: http://localhost:5173
+- API: http://localhost:8000
+
+The API uses the `MONGO_URI` from `backend/.env`. If that is MongoDB Atlas, add your IP under **Atlas > Network Access**.
+To use a local MongoDB container instead, set `MONGO_URI=mongodb://mongo:27017/tasklytic` in `backend/.env` and run:
+
+```bash
+docker compose --profile local-db up --build -d
+```
+
+`VITE_*` values are built into the frontend, so rebuild (`--build`) after changing `frontend/.env`.
+Stop everything with `docker compose down` (add `-v` to also delete the local database).
+
 ## Environment variables
 
 ### Backend (`backend/.env`)
@@ -139,8 +160,7 @@ Without the Stripe or AI keys the app still runs. The upgrade and AI endpoints r
 
 1. In the [Stripe Dashboard](https://dashboard.stripe.com) (start in **test mode**), create a product **Tasklytic Premium** with a **recurring price of $20 / month**. Copy its price ID into `STRIPE_PRICE_ID`.
 2. Copy your secret key into `STRIPE_SECRET_KEY`.
-3. Turn on the **Customer Portal** (Settings → Billing → Customer portal) so users can cancel or update their card.
-4. Add a webhook endpoint at `https://<your-api>/api/billing/webhook` with these events:
+3. Add a webhook endpoint at `https://<your-api>/api/billing/webhook` with these events:
    - `checkout.session.completed`
    - `customer.subscription.created`
    - `customer.subscription.updated`
@@ -187,6 +207,32 @@ All routes except register, login, password reset and the Stripe webhook need `A
 | GET / POST | `/` | List your tasks / create a task |
 | GET / PATCH / DELETE | `/:id` | Get / update / delete a task |
 | POST | `/bulk-delete` | Delete several tasks |
+| POST | `/:id/timer/start` | Start the focus timer (stops any other running timer) |
+| POST | `/:id/timer/stop` | Stop the focus timer and add the time to the task |
+| GET | `/briefing` | Daily briefing for every plan, built without AI |
+| POST | `/bulk` | `{ tasks }` → create up to 30 tasks at once (AI capture review) |
+| POST | `/reschedule` | `{ ids, dueDate }` → move tasks to another day (bill tasks keep their date) |
+| GET | `/plan?date=YYYY-MM-DD` | The saved "Plan my day" for that date, or `null` |
+
+### Finance (`/api/finance`): Premium only
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET / PATCH | `/settings` | Currency, monthly budgets, invoice details |
+| GET | `/summary?month=YYYY-MM` | Totals, spending by category vs budgets, 6-month trend, bills, freelance |
+| GET / POST | `/transactions` | List a month's expenses & income / add one |
+| PATCH / DELETE | `/transactions/:id` | Edit / delete |
+| GET / POST | `/bills` | Recurring bills; each one keeps a "Pay ..." task in the task list |
+| PATCH / DELETE | `/bills/:id` | Edit / stop tracking (past payments stay) |
+| POST | `/bills/:id/pay` | Record the payment and schedule the next one |
+| GET / POST | `/clients` | Freelance clients with hourly rates |
+| PATCH / DELETE | `/clients/:id` | Edit / remove (archived when it has history) |
+| GET | `/unbilled` | Focus time not invoiced yet, per client |
+| GET / POST | `/invoices` | List / create from a client's unbilled time |
+| PATCH / DELETE | `/invoices/:id` | Edit lines, mark sent / paid (paid = income) / delete unpaid |
+
+Ticking a bill task off in the task list does the same as `/bills/:id/pay`; reopening it removes the payment.
+Focus-timer sessions and manual time corrections are kept as time entries, which earnings and invoices are built from.
 
 ### Activity (`/api/activities`)
 
@@ -199,7 +245,11 @@ All routes except register, login, password reset and the Stripe webhook need `A
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/checkout` | Start a Premium checkout, returns `{ url }` |
-| POST | `/portal` | Open the Stripe Customer Portal, returns `{ url }` |
+| POST | `/cancel` | Cancel at the end of the paid month, returns the user |
+| POST | `/resume` | Undo a pending cancellation, returns the user |
+| GET | `/card` | Card on file, returns `{ card }` |
+| POST | `/card/setup` | Start an in-app card update, returns `{ client_secret }` |
+| POST | `/card` | Save the confirmed card as default (retries a failed payment) |
 | POST | `/sync` | Re-read the subscription from Stripe |
 | POST | `/webhook` | Stripe webhook (signature verified, no JWT) |
 
@@ -212,6 +262,11 @@ All routes except register, login, password reset and the Stripe webhook need `A
 | POST | `/describe` | `{ title, description, category }` → written description |
 | GET | `/insights` | Weekly summary, highlights and focus items |
 | GET | `/briefing` | Short spoken briefing of today's tasks |
+| POST | `/brain-dump` | `{ text }` (typed or dictated) → several tasks to review |
+| POST | `/image-tasks` | multipart `image` (+ optional `hint`) → tasks found in a photo or screenshot |
+| POST | `/plan-day` | `{ start, end, note }` → time blocks for today (saved) |
+| POST | `/receipt` | multipart `image` → `{ amount, note, date, category }` from a receipt |
+| GET | `/finance-insights?month=YYYY-MM` | Money coach summary and tips |
 
 ---
 

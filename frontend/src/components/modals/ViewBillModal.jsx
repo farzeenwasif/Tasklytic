@@ -1,143 +1,131 @@
-import { X } from 'lucide-react';
+import { useContext, useState } from 'react';
+import { Briefcase, CalendarDays, Clock, Edit2, Receipt, Repeat, Tag, X } from 'lucide-react';
+import useClients from '../../hooks/useClients';
+import { TaskContext } from '../../context/BillContext';
+import { REPEAT_LABEL } from '../../constants/taskOptions';
+import { dueInfo, formatDuration, isDone } from '../../utils/taskUtils';
+import { DoneButton, FocusButton, PRIORITY_STYLES, STATUS_STYLES, useElapsed } from '../TaskCard';
 
-export default function ViewTaskModal({ isOpen, task, onClose }) {
+function Chip({ className, children }) {
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+// Task details: tick steps off, run the focus timer, mark it done
+export default function ViewTaskModal({ isOpen, task: selected, onClose, onEdit }) {
+  const { tasks, toggleSubtask } = useContext(TaskContext);
+  const [error, setError] = useState('');
+  // Always show the live version of the task (it changes while this box is open)
+  const task = (selected && tasks.find((t) => t.id === selected.id)) || selected;
+  const elapsed = useElapsed(task?.timerStartedAt);
+  const clients = useClients();
+  const client = task?.clientId ? clients.find((c) => c._id === task.clientId) : null;
+
   if (!isOpen || !task) return null;
 
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'High':
-        return 'bg-red-500/20 text-red-300 border-red-500/50';
-      case 'Medium':
-        return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50';
-      case 'Low':
-        return 'bg-green-500/20 text-green-300 border-green-500/50';
-      default:
-        return 'bg-gray-500/20 text-gray-300 border-gray-500/50';
+  const due = dueInfo(task);
+  const spent = (Number(task.hoursLogged) || 0) + elapsed / 3600;
+  const estimated = Number(task.estimatedHours) || 0;
+  const steps = task.subtasks || [];
+  const stepsDone = steps.filter((s) => s.done).length;
+
+  const tick = async (index) => {
+    setError('');
+    try {
+      await toggleSubtask(task, index);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not update the step');
     }
   };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Completed':
-        return 'bg-green-500/20 text-green-300 border-green-500/50';
-      case 'In Progress':
-        return 'bg-blue-500/20 text-emerald-300 border-blue-500/50';
-      case 'Ready to Assign':
-        return 'bg-purple-500/20 text-purple-300 border-purple-500/50';
-      case 'Scheduled':
-        return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50';
-      default:
-        return 'bg-gray-500/20 text-gray-300 border-gray-500/50';
-    }
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  const progressPercentage = task.estimatedHours > 0 ? Math.round((task.hoursLogged / task.estimatedHours) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
-      <div className="glass-panel modal-pop rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 sticky top-0 z-10 glass-header">
-          <h2 className="text-xl sm:text-2xl font-bold text-white">Task Details</h2>
-          <button
-            onClick={onClose}
-            type="button"
-            className="text-gray-400 hover:text-white transition-colors p-1"
-          >
-            <X size={24} />
-          </button>
+    <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="glass-panel modal-pop rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Task details"
+      >
+        <div className="flex justify-between items-start gap-3 px-6 py-5 border-b border-white/10">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="pt-1"><DoneButton task={task} onError={setError} size="w-7 h-7" /></div>
+            <h2 className={`text-xl sm:text-2xl font-bold break-words ${isDone(task) ? 'line-through text-gray-400' : 'text-white'}`}>
+              {task.title}
+            </h2>
+          </div>
+          <div className="flex items-center shrink-0">
+            {onEdit && (
+              <button onClick={onEdit} type="button" aria-label="Edit" title="Edit" className="text-gray-400 hover:text-white transition-colors p-1.5">
+                <Edit2 size={18} />
+              </button>
+            )}
+            <button onClick={onClose} type="button" aria-label="Close" className="text-gray-400 hover:text-white transition-colors p-1">
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-6">
-          {/* Task Title */}
-          <div>
-            <p className="text-sm text-gray-400 mb-1">Task Title</p>
-            <p className="text-xl font-semibold text-white">{task.title}</p>
+        <div className="p-6 space-y-5">
+          <div className="flex flex-wrap gap-2">
+            <Chip className={STATUS_STYLES[task.status] || STATUS_STYLES['To do']}>{task.status}</Chip>
+            <Chip className={PRIORITY_STYLES[task.priority] || STATUS_STYLES['To do']}>{task.priority} priority</Chip>
+            <Chip className="bg-white/5 text-gray-300 border-white/10"><Tag size={11} /> {task.category}</Chip>
+            {client && (
+              <Chip className="bg-white/5 text-gray-300 border-white/10"><Briefcase size={11} /> {client.name} · billable</Chip>
+            )}
+            {task.billId && (
+              <Chip className="bg-white/5 text-gray-300 border-white/10"><Receipt size={11} /> Bill: ticking it off records the payment</Chip>
+            )}
+            {task.repeat && task.repeat !== 'none' && (
+              <Chip className="bg-white/5 text-gray-300 border-white/10"><Repeat size={11} /> {REPEAT_LABEL[task.repeat]}</Chip>
+            )}
           </div>
 
-          {/* Assignee and Category */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-400 mb-1">Assigned to</p>
-              <p className="text-white font-medium">{task.assignee || '—'}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+              <p className="text-xs text-gray-400 flex items-center gap-1.5"><CalendarDays size={13} /> Due</p>
+              <p className={`mt-1 font-semibold ${due.tone}`}>{due.label}</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-400 mb-1">Category</p>
-              <p className="text-white font-medium">{task.category}</p>
-            </div>
-          </div>
-
-          {/* Priority and Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-400 mb-2">Priority</p>
-              <span className={`inline-block px-3 py-1 rounded-full border font-semibold text-sm ${getPriorityColor(task.priority)}`}>
-                {task.priority}
-              </span>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400 mb-2">Status</p>
-              <span className={`inline-block px-3 py-1 rounded-full border font-semibold text-sm ${getStatusColor(task.status)}`}>
-                {task.status}
-              </span>
+            <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+              <p className="text-xs text-gray-400 flex items-center gap-1.5"><Clock size={13} /> Time spent</p>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <p className={`font-semibold tabular-nums ${estimated > 0 && spent > estimated ? 'text-red-400' : 'text-white'}`}>
+                  {formatDuration(spent)}
+                  {estimated > 0 && <span className="text-gray-400 font-normal"> / {formatDuration(estimated)}</span>}
+                </p>
+                <FocusButton task={task} onError={setError} />
+              </div>
             </div>
           </div>
 
-          {/* Hours Progress */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <p className="text-sm text-gray-400">Hours Progress</p>
-              <p className="text-sm font-semibold text-emerald-300">{progressPercentage}%</p>
-            </div>
-            <div className="w-full bg-white/10 rounded-full h-2">
-              <div
-                className="bg-emerald-400 h-2 rounded-full transition-all"
-                style={{ width: `${progressPercentage}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-400">{task.hoursLogged} / {task.estimatedHours} hours</p>
-          </div>
-
-          {/* Due Date */}
-          <div>
-            <p className="text-sm text-gray-400 mb-1">Due Date</p>
-            <p className="text-white font-medium">{formatDate(task.dueDate)}</p>
-          </div>
-
-          {/* Description */}
-          {task.description && (
+          {steps.length > 0 && (
             <div>
-              <p className="text-sm text-gray-400 mb-2">Description</p>
-              <p className="text-gray-300 bg-white/5 border border-white/10 p-3 rounded-lg text-sm">{task.description}</p>
+              <p className="text-sm text-gray-400 mb-2">Steps · {stepsDone}/{steps.length}</p>
+              <ul className="space-y-1.5">
+                {steps.map((s, i) => (
+                  <li key={i}>
+                    <label className="flex items-start gap-3 text-sm cursor-pointer rounded-lg px-2 py-1.5 hover:bg-white/5">
+                      <input type="checkbox" checked={s.done} onChange={() => tick(i)} className="accent-emerald-500 w-4 h-4 mt-0.5 shrink-0" />
+                      <span className={s.done ? 'line-through text-gray-500' : 'text-gray-200'}>{s.title}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
-          {/* Summary Box */}
-          <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-2">
-            <p className="text-sm text-emerald-300 font-semibold">Task Summary</p>
-            <div className="space-y-1 text-xs text-emerald-300">
-              <p>• Priority: <span className="font-semibold">{task.priority}</span></p>
-              <p>• Progress: <span className="font-semibold">{progressPercentage}% Complete</span></p>
-              <p>• Time Estimate: <span className="font-semibold">{task.estimatedHours} hours</span></p>
+          {task.description && (
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Notes</p>
+              <p className="text-gray-300 bg-white/5 border border-white/10 p-3 rounded-lg text-sm whitespace-pre-wrap break-words">{task.description}</p>
             </div>
-          </div>
+          )}
 
-          {/* Close Button */}
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2  btn-primary"
-          >
-            Close
-          </button>
+          {error && <p className="text-red-400 text-sm">{error}</p>}
         </div>
       </div>
     </div>

@@ -21,11 +21,6 @@ export default function DeleteConfirmModal({ isOpen, task, onClose, onConfirm })
           <p className="text-gray-300">
             Are you sure you want to delete <span className="font-semibold text-red-400">{task.title}</span>?
           </p>
-          {task.assignee && (
-            <p className="text-gray-400 text-sm">
-              Assigned to: <span className="text-red-400 font-semibold">{task.assignee}</span>
-            </p>
-          )}
           <p className="text-gray-400 text-sm">This action cannot be undone.</p>
         </div>
 

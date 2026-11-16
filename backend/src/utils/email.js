@@ -22,7 +22,7 @@ const getTransporter = () => {
  * Without SMTP settings (local development) the message is printed to the
  * server console instead, so the reset flow can still be tried out.
  */
-export const sendEmail = async ({ to, subject, html, text }) => {
+export const sendEmail = async ({ to, subject, html, text, replyTo }) => {
   if (!isConfigured()) {
     if (process.env.NODE_ENV === "production") {
       console.error("SMTP is not configured: email was NOT sent. Set SMTP_HOST, SMTP_USER and SMTP_PASS.");
@@ -38,6 +38,7 @@ export const sendEmail = async ({ to, subject, html, text }) => {
     subject,
     html,
     text,
+    ...(replyTo ? { replyTo } : {}),
   });
   return { delivered: true };
 };

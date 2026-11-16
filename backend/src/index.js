@@ -5,7 +5,10 @@ dotenv.config({ path: "./.env" });
 const { default: app } = await import("./app.js");
 const { default: connectDB } = await import("./db/index.js");
 
+const { runMigrations } = await import("./utils/migrations.js");
+
 connectDB()
+  .then(runMigrations)
   .then(() => {
     const port = process.env.PORT || 8000;
     const server = app.listen(port, () => {

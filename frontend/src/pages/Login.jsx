@@ -28,11 +28,9 @@ export default function Login() {
     setError("");
 
     try {
-      const u = await login(formData);
-      // Premium: the dashboard reads today's briefing aloud once after login
-      if (u?.isPremium) {
-        try { sessionStorage.setItem(BRIEFING_FLAG, "1"); } catch { /* private mode */ }
-      }
+      await login(formData);
+      // The dashboard loads today's briefing once after login (read aloud only if unmuted)
+      try { sessionStorage.setItem(BRIEFING_FLAG, "1"); } catch { /* private mode */ }
       // Go back to the page the user originally wanted, or the dashboard
       navigate(location.state?.from?.pathname || "/dashboard", { replace: true });
     } catch (err) {

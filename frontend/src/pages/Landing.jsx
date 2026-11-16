@@ -11,20 +11,28 @@ import {
 import {
   ArrowRight,
   BarChart3,
+  Camera,
   CheckCircle2,
   Clock,
-  History,
+  Coffee,
+  FileText,
   ListChecks,
   Menu,
+  Mic,
+  Receipt,
+  Repeat,
   ShieldCheck,
-  Smartphone,
   Sparkles,
+  Sun,
   UserPlus,
+  Volume2,
+  Wallet,
   X,
 } from 'lucide-react'
 import BrandLogo, { BRAND_NAME } from '../components/BrandLogo'
 import { UserContext } from '../context/UserContext'
 import PricingCards from '../components/PricingCards'
+import ContactForm from '../components/ContactForm'
 
 // three.js is heavy: load the 3D scene separately so the page text appears instantly
 const HeroScene = lazy(() => import('../components/landing/HeroScene'))
@@ -70,10 +78,10 @@ function Reveal({ children, delay = 0, className = '', as = 'div' }) {
 /* ---------- Dashboard preview (sample data) ---------- */
 
 const previewStats = [
-  { label: 'Ready to Assign', value: '4', tint: 'from-violet-400/25', ring: 'text-violet-300', pct: 30 },
+  { label: 'Left for today', value: '4', tint: 'from-violet-400/25', ring: 'text-violet-300', pct: 60 },
   { label: 'Completed', value: '9 / 14', tint: 'from-emerald-400/25', ring: 'text-emerald-300', pct: 64 },
-  { label: 'Hours Logged', value: '62h', tint: 'from-violet-400/25', ring: 'text-violet-300', pct: 72 },
-  { label: 'Meetings', value: '3', tint: 'from-emerald-400/25', ring: 'text-emerald-300', pct: 100 },
+  { label: 'Focus time', value: '62h', tint: 'from-violet-400/25', ring: 'text-violet-300', pct: 72 },
+  { label: 'Budget used', value: '58%', tint: 'from-emerald-400/25', ring: 'text-emerald-300', pct: 58 },
 ]
 
 const previewBars = [
@@ -85,10 +93,12 @@ const previewBars = [
   { m: 'Jan', v: 30 },
 ]
 
-const previewTasks = [
-  { t: 'Dashboard UI design', s: 'In Progress', c: 'bg-blue-500/20 text-blue-300', p: 'High', h: '6/10h' },
-  { t: 'API integration', s: 'Completed', c: 'bg-green-500/20 text-green-300', p: 'Medium', h: '8/8h' },
-  { t: 'Weekly standup', s: 'Scheduled', c: 'bg-cyan-500/20 text-cyan-300', p: 'Low', h: '1/1h' },
+// "Plan my day" blocks shown in the preview
+const previewPlan = [
+  { time: '9:00', t: 'Write client proposal', note: 'High priority · 2h', done: true },
+  { time: '11:00', t: 'Break', brk: true },
+  { time: '11:15', t: 'Pay electricity bill', note: 'Bill · records the payment' },
+  { time: '3:00', t: 'Call the bank', note: 'Fixed time' },
 ]
 
 function Ring({ pct, className }) {
@@ -129,7 +139,7 @@ function DashboardPreview() {
           <span className="w-2.5 h-2.5 rounded-full bg-red-400/70" />
           <span className="w-2.5 h-2.5 rounded-full bg-amber-400/70" />
           <span className="w-2.5 h-2.5 rounded-full bg-green-400/70" />
-          <span className="ml-3 text-[11px] text-gray-500 truncate">{BRAND_NAME} · Dashboard</span>
+          <span className="ml-3 text-[11px] text-gray-500 truncate">{BRAND_NAME} · My Day</span>
         </div>
 
         <div className="p-3 sm:p-5 space-y-3 sm:space-y-4">
@@ -148,7 +158,7 @@ function DashboardPreview() {
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div className="md:col-span-3 rounded-xl bg-[#1c1c1f] border border-white/5 p-3 sm:p-4">
               <div className="flex justify-between items-center mb-3">
-                <p className="text-xs sm:text-sm font-semibold text-white">Hours per month</p>
+                <p className="text-xs sm:text-sm font-semibold text-white">Focus time per month</p>
                 <span className="text-[10px] text-gray-500">last 6 months</span>
               </div>
               <div className="flex items-end justify-between gap-2 h-28 sm:h-36">
@@ -169,22 +179,31 @@ function DashboardPreview() {
             </div>
 
             <div className="md:col-span-2 rounded-xl bg-[#1c1c1f] border border-white/5 p-3 sm:p-4">
-              <p className="text-xs sm:text-sm font-semibold text-white mb-3">My tasks</p>
-              <ul className="space-y-2.5">
-                {previewTasks.map((t, i) => (
+              <p className="text-xs sm:text-sm font-semibold text-white mb-3 flex items-center gap-1.5">
+                <Sparkles size={13} className="text-[#34D399]" /> Planned by AI
+              </p>
+              <ul className="space-y-2">
+                {previewPlan.map((t, i) => (
                   <motion.li
                     key={t.t}
-                    className="flex items-center justify-between gap-2"
+                    className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 ${i === 2 ? 'bg-emerald-500/10 border border-emerald-400/30' : ''}`}
                     initial={{ opacity: 0, x: 16 }}
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5, delay: 0.5 + i * 0.12 }}
                   >
-                    <div className="min-w-0">
-                      <p className="text-xs text-white truncate">{t.t}</p>
-                      <p className="text-[10px] text-gray-500">{t.p} · {t.h}</p>
-                    </div>
-                    <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded ${t.c}`}>{t.s}</span>
+                    <span className="w-9 shrink-0 text-[10px] tabular-nums text-gray-400">{t.time}</span>
+                    {t.brk ? (
+                      <p className="text-xs text-gray-400 flex items-center gap-1.5"><Coffee size={12} /> {t.t}</p>
+                    ) : (
+                      <>
+                        <span className={`w-3.5 h-3.5 shrink-0 rounded-full border ${t.done ? 'bg-emerald-400 border-emerald-400' : 'border-gray-500'}`} />
+                        <div className="min-w-0">
+                          <p className={`text-xs truncate ${t.done ? 'text-gray-500 line-through' : 'text-white'}`}>{t.t}</p>
+                          <p className="text-[10px] text-gray-500 truncate">{t.note}</p>
+                        </div>
+                      </>
+                    )}
                   </motion.li>
                 ))}
               </ul>
@@ -198,19 +217,48 @@ function DashboardPreview() {
 
 /* ---------- Content ---------- */
 
+// Free plan
 const features = [
-  { icon: ListChecks, title: 'Task management', text: 'Create, edit and organise tasks with status, priority, category, assignee and due date.' },
-  { icon: Clock, title: 'Hours tracking', text: 'Log hours against estimates and see what is done and what is left on every task.' },
-  { icon: BarChart3, title: 'Visual analytics', text: 'Stat cards, a progress gauge and a monthly hours chart show your workload at a glance.' },
-  { icon: History, title: 'Activity log', text: 'Every change is recorded: tasks created, hours logged, work completed, profile updates.' },
-  { icon: ShieldCheck, title: 'Private by default', text: 'Every account has its own secure login. Your tasks are visible only to you.' },
-  { icon: Smartphone, title: 'Works on any screen', text: 'A layout that adapts from phone to widescreen, with bottom navigation on mobile.' },
+  { icon: ListChecks, title: 'Add tasks in one line', text: 'Type "Pay rent Friday 5pm !high" and press Enter. Dates, times, priority and repeats, even "kal" and "parson", are understood as you type.' },
+  { icon: Clock, title: 'Focus timer, no timesheets', text: 'Press Focus on a task and your time is counted for you. One timer at a time, so the numbers stay honest.' },
+  { icon: Repeat, title: 'Steps and repeating tasks', text: 'Break work into a checklist. Daily, weekday, weekly or monthly tasks come back on their own when you tick them off.' },
+  { icon: Sun, title: 'My Day', text: 'Everything due today in one list. Overdue work moves to today with one click instead of piling up.' },
+  { icon: Volume2, title: 'Daily briefing', text: 'A short summary of your day after you log in, read aloud with one tap. Silent until you ask for it.' },
+  { icon: BarChart3, title: 'Dashboard and analytics', text: 'What is left for today, what you finished and where your focus time went, plus a full activity log.' },
+]
+
+// Premium (AI) showcase
+const proFeatures = [
+  {
+    icon: Mic,
+    title: 'AI capture',
+    text: 'Empty your head in one go. Speak or type a messy brain dump in English or Urdu, or snap a photo of a handwritten list, a whiteboard or a WhatsApp chat. The AI turns it into tasks with dates for you to check and add.',
+    points: ['Voice, text or photo', 'Paste a screenshot', 'Review before adding'],
+  },
+  {
+    icon: Sparkles,
+    title: 'Plan my day',
+    text: 'Tell it when your day starts and ends. The AI puts your most important tasks into realistic time blocks, keeps fixed appointments in place, adds breaks, and tells you what to move to tomorrow.',
+    points: ['Time blocks with breaks', 'Re-plan in seconds', 'Focus timer from the plan'],
+  },
+  {
+    icon: Wallet,
+    title: 'Money, next to your tasks',
+    text: 'Bills and subscriptions become reminders, and ticking one off records the payment. Snap a receipt and the AI fills in the expense. Monthly budgets warn you before you overspend, and an AI money coach explains your month.',
+    points: ['Bills that remind you', 'Receipt scanning', 'Budgets and AI money coach'],
+  },
+  {
+    icon: FileText,
+    title: 'Freelance, handled',
+    text: 'Add clients with an hourly rate and link tasks to them. Your focus time becomes earnings, and one click turns unbilled time into an invoice you can print or save as PDF. Mark it paid and it lands in your income.',
+    points: ['Earnings from focus time', 'One-click invoices', 'Paid invoices become income'],
+  },
 ]
 
 const steps = [
-  { icon: UserPlus, title: 'Create your account', text: 'Sign up in seconds. Your workspace and profile are ready immediately.' },
-  { icon: ListChecks, title: 'Add your tasks', text: 'Set priority, category, estimated hours and a due date for each task.' },
-  { icon: BarChart3, title: 'Track your progress', text: 'Log hours as you go and watch your dashboard and activity log update.' },
+  { icon: UserPlus, title: 'Create your account', text: 'Sign up in seconds. Free forever; upgrade only if you want the AI.' },
+  { icon: Mic, title: 'Get it out of your head', text: 'Type tasks in one line, or with Premium speak a brain dump or snap a photo of your list.' },
+  { icon: Sun, title: 'Let your day run itself', text: 'Follow your plan, run the focus timer, tick things off. Bills, budgets and invoices keep up on their own.' },
 ]
 
 /* Card with a glow that follows the cursor */
@@ -250,8 +298,10 @@ export default function Landing() {
 
   const navLinks = [
     { href: '#features', label: 'Features' },
+    { href: '#ai', label: 'AI & Finance' },
     { href: '#how', label: 'How it works' },
     { href: '#pricing', label: 'Pricing' },
+    { href: '#contact', label: 'Help' },
   ]
 
   const heroItem = {
@@ -359,18 +409,18 @@ export default function Landing() {
                   variants={heroItem}
                   className="inline-flex items-center gap-2 text-xs sm:text-sm px-3 py-1 rounded-full border border-[#10B981]/30 bg-[#10B981]/10 text-[#A7F3D0]"
                 >
-                  <Sparkles size={14} /> Tasks, hours and analytics in one place
+                  <Sparkles size={14} /> Tasks, your day and your money, with AI
                 </motion.span>
                 <motion.h1
                   variants={heroItem}
                   className="mt-6 text-4xl sm:text-5xl xl:text-6xl font-extrabold tracking-tight text-white leading-[1.08]"
                 >
-                  Plan your work.{' '}
-                  <span className="gradient-text">See your progress.</span>
+                  Get it out of your head.{' '}
+                  <span className="gradient-text">Get it done.</span>
                 </motion.h1>
                 <motion.p variants={heroItem} className="mt-5 text-base sm:text-lg text-gray-400 leading-relaxed max-w-xl mx-auto lg:mx-0">
-                  {BRAND_NAME} is a personal dashboard for your tasks and time. Track status and priority,
-                  log hours against estimates, and understand your workload with clear visual analytics.
+                  {BRAND_NAME} turns a one-line note, a voice message or a photo into tasks, plans your day around them,
+                  and keeps your bills, budget and freelance invoices in the same place.
                 </motion.p>
                 <motion.div variants={heroItem} className="mt-8 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
                   <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
@@ -389,7 +439,7 @@ export default function Landing() {
                   </a>
                 </motion.div>
                 <motion.ul variants={heroItem} className="mt-6 flex flex-wrap justify-center lg:justify-start gap-x-6 gap-y-2 text-sm text-gray-500">
-                  {['Free to use', 'Private account', 'Mobile friendly'].map((t) => (
+                  {['Free plan forever', 'English & Roman Urdu', 'Works on your phone'].map((t) => (
                     <li key={t} className="flex items-center gap-1.5">
                       <CheckCircle2 size={15} className="text-[#34D399]" /> {t}
                     </li>
@@ -423,8 +473,8 @@ export default function Landing() {
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
               <Reveal className="text-center max-w-2xl mx-auto">
                 <p className="text-sm font-semibold text-[#34D399] uppercase tracking-wider">Features</p>
-                <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-white">Everything you need to stay on track</h2>
-                <p className="mt-4 text-gray-400">Simple enough for personal to-dos, structured enough for real projects.</p>
+                <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-white">A to-do list without the busywork</h2>
+                <p className="mt-4 text-gray-400">No forms, no timesheets. All of this is free.</p>
               </Reveal>
               <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {features.map(({ icon: Icon, title, text }, i) => (
@@ -442,8 +492,50 @@ export default function Landing() {
             </div>
           </section>
 
+          {/* ---------- Premium: AI & Finance ---------- */}
+          <section id="ai" className="scroll-mt-20 border-t border-white/5">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
+              <Reveal className="text-center max-w-2xl mx-auto">
+                <p className="text-sm font-semibold text-[#34D399] uppercase tracking-wider">Premium</p>
+                <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-white">An assistant for your tasks, your day and your money</h2>
+                <p className="mt-4 text-gray-400">The AI does the typing, the planning and the bookkeeping. You do the work.</p>
+              </Reveal>
+              <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                {proFeatures.map(({ icon: Icon, title, text, points }, i) => (
+                  <Reveal key={title} delay={(i % 2) * 0.12}>
+                    <SpotlightCard className="sm:p-8">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center bg-[#10B981]/10 text-[#34D399] group-hover:bg-[#10B981]/20 transition-colors">
+                          <Icon size={22} />
+                        </div>
+                        <h3 className="text-xl font-semibold text-white">{title}</h3>
+                      </div>
+                      <p className="mt-4 text-sm text-gray-400 leading-relaxed">{text}</p>
+                      <ul className="mt-5 flex flex-wrap gap-2">
+                        {points.map((pt) => (
+                          <li key={pt} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-gray-300">
+                            <CheckCircle2 size={12} className="text-[#34D399]" /> {pt}
+                          </li>
+                        ))}
+                      </ul>
+                    </SpotlightCard>
+                  </Reveal>
+                ))}
+              </div>
+              <Reveal className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-gray-500">
+                {[
+                  { icon: Camera, t: 'Reads photos and screenshots' },
+                  { icon: Receipt, t: 'Scans receipts' },
+                  { icon: ShieldCheck, t: 'Your data stays private to your account' },
+                ].map(({ icon: Icon, t }) => (
+                  <span key={t} className="flex items-center gap-1.5"><Icon size={15} className="text-[#34D399]" /> {t}</span>
+                ))}
+              </Reveal>
+            </div>
+          </section>
+
           {/* ---------- How it works ---------- */}
-          <section id="how" className="scroll-mt-20 border-t border-white/5">
+          <section id="how" className="scroll-mt-20 border-t border-white/5 bg-[#111113]/60">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
               <Reveal className="text-center max-w-2xl mx-auto">
                 <p className="text-sm font-semibold text-[#34D399] uppercase tracking-wider">How it works</p>
@@ -465,13 +557,14 @@ export default function Landing() {
           </section>
 
           {/* ---------- Pricing ---------- */}
-          <section id="pricing" className="scroll-mt-20 border-t border-white/5 bg-[#111113]/60">
+          <section id="pricing" className="scroll-mt-20 border-t border-white/5">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
               <Reveal className="text-center max-w-2xl mx-auto mb-12">
                 <p className="text-sm font-semibold text-[#34D399] uppercase tracking-wider">Pricing</p>
                 <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-white">Start free. Add AI when you're ready.</h2>
                 <p className="mt-4 text-gray-400">
-                  Premium adds a built-in AI assistant. Cancel anytime.
+                  The free plan is a complete task manager. Premium adds AI capture, day planning, finance and invoices.
+                  Cancel anytime from your profile.
                 </p>
               </Reveal>
               <Reveal>
@@ -493,6 +586,23 @@ export default function Landing() {
             </div>
           </section>
 
+          {/* ---------- Help / contact ---------- */}
+          <section id="contact" className="scroll-mt-20 border-t border-white/5 bg-[#111113]/60">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-start">
+              <Reveal>
+                <p className="text-sm font-semibold text-[#34D399] uppercase tracking-wider">Help</p>
+                <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-white">Questions? We are here.</h2>
+                <p className="mt-4 text-gray-400 leading-relaxed">
+                  Trouble with your account, a payment, or a feature you would love to see? Send a message and we reply by email,
+                  usually within a day. English or Roman Urdu, both are fine.
+                </p>
+              </Reveal>
+              <Reveal delay={0.1} className="rounded-2xl p-5 sm:p-7 bg-[#18181b] border border-white/5">
+                <ContactForm />
+              </Reveal>
+            </div>
+          </section>
+
           {/* ---------- CTA ---------- */}
           <section className="border-t border-white/5 px-4 sm:px-6 py-16 sm:py-24">
             <Reveal className="max-w-5xl mx-auto relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#17171a] via-[#141416] to-[#141416] px-6 py-12 sm:p-14 text-center">
@@ -501,9 +611,9 @@ export default function Landing() {
                 transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
                 className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none"
               />
-              <h2 className="relative text-2xl sm:text-4xl font-bold text-white">Ready to take control of your time?</h2>
+              <h2 className="relative text-2xl sm:text-4xl font-bold text-white">Stop carrying it all in your head</h2>
               <p className="relative mt-4 text-gray-400 max-w-xl mx-auto">
-                Create your free {BRAND_NAME} account and start tracking tasks and hours today.
+                Create your free {BRAND_NAME} account. Your first task takes one line.
               </p>
               <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} className="relative mt-8 inline-block w-full sm:w-auto">
                 <Link
@@ -523,8 +633,10 @@ export default function Landing() {
             <BrandLogo size={26} />
             <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2">
               <a href="#features" className="hover:text-white transition-colors">Features</a>
+              <a href="#ai" className="hover:text-white transition-colors">AI &amp; Finance</a>
               <a href="#how" className="hover:text-white transition-colors">How it works</a>
               <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+              <a href="#contact" className="hover:text-white transition-colors">Help</a>
               {!user && <Link to="/login" className="hover:text-white transition-colors">Log in</Link>}
             </nav>
             <p>© {new Date().getFullYear()} {BRAND_NAME}</p>

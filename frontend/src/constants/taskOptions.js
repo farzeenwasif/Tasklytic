@@ -1,6 +1,15 @@
 // Keep these in sync with backend/src/models/tasksSchema.js
 
-export const TASK_STATUSES = ['Ready to Assign', 'In Progress', 'Completed', 'Scheduled'];
+export const TASK_STATUSES = ['To do', 'Doing', 'Done'];
+
+export const TASK_REPEATS = [
+  { value: 'none', label: 'Does not repeat' },
+  { value: 'daily', label: 'Every day' },
+  { value: 'weekdays', label: 'Every weekday' },
+  { value: 'weekly', label: 'Every week' },
+  { value: 'monthly', label: 'Every month' },
+];
+export const REPEAT_LABEL = Object.fromEntries(TASK_REPEATS.map((r) => [r.value, r.label]));
 
 export const TASK_PRIORITIES = ['Low', 'Medium', 'High'];
 
@@ -22,4 +31,4 @@ export const TASK_CATEGORIES = [
   'Other',
 ];
 
-export const DEFAULT_CATEGORY = 'Work';
+export const DEFAULT_CATEGORY = 'Personal';

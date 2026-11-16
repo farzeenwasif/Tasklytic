@@ -1,6 +1,7 @@
 import { useContext } from 'react';
-import { FaUserAlt, FaThLarge, FaClock, FaVideo } from "react-icons/fa";
+import { FaCalendarDay, FaThLarge, FaClock, FaPlay } from "react-icons/fa";
 import { TaskContext } from '../context/BillContext';
+import { formatDuration, localToday } from '../utils/taskUtils';
 
 const Card = ({ icon, gradient, progressColor, topText, mainValue, bottomText, progress }) => {
   const circleLength = 126; // circumference of circle
@@ -58,57 +59,58 @@ export default function DashboardCards() {
   const { getTaskStats, tasks } = useContext(TaskContext);
   const stats = getTaskStats();
 
-  // Calculate progress percentages
-  const readyToAssignProgress = tasks.length > 0 ? Math.round((stats.readyToAssign / tasks.length) * 100) : 0;
-  const completedProgress = tasks.length > 0 ? Math.round((stats.completed / tasks.length) * 100) : 0;
-  // Progress against the hours the user actually estimated; 0 when there is nothing to measure
+  const pct = (part, whole) => (whole > 0 ? Math.min(100, Math.round((part / whole) * 100)) : 0);
+
+  // Today: what is left (due today or overdue) against what was already finished today
+  const today = localToday();
+  const localDay = (iso) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const doneToday = tasks.filter((t) => t.status === "Done" && t.completedAt && localDay(t.completedAt) === today).length;
+  const leftToday = stats.dueToday + stats.overdue;
   const totalEstimatedHours = tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
-  const hoursLoggedProgress = totalEstimatedHours > 0
-    ? Math.min(Math.round((stats.totalHoursLogged / totalEstimatedHours) * 100), 100)
-    : 0;
-  // share of all tasks that are meetings
-  const meetingsProgress = tasks.length > 0 ? Math.round((stats.scheduled / tasks.length) * 100) : 0;
 
   const cards = [
     {
       id: 1,
-      icon: <FaUserAlt size={18} />,
+      icon: <FaCalendarDay size={18} />,
       gradient: "card-gradient-purple",
       progressColor: "text-violet-300",
-      topText: "Ready to Assign",
-      mainValue: stats.readyToAssign,
-      bottomText: `In progress: ${stats.inProgress} · Total: ${tasks.length}`,
-      progress: readyToAssignProgress,
+      topText: "Left for today",
+      mainValue: leftToday,
+      bottomText: `Done today: ${doneToday}${stats.overdue ? ` · Overdue: ${stats.overdue}` : ""}`,
+      progress: pct(doneToday, doneToday + leftToday),
     },
     {
       id: 2,
       icon: <FaThLarge size={18} />,
       gradient: "card-gradient-green",
       progressColor: "text-emerald-300",
-      topText: "Tasks Completed",
+      topText: "Tasks completed",
       mainValue: `${stats.completed} / ${tasks.length}`,
-      bottomText: `Remaining: ${tasks.length - stats.completed}`,
-      progress: completedProgress,
+      bottomText: `Open: ${stats.open}`,
+      progress: pct(stats.completed, tasks.length),
     },
     {
       id: 3,
       icon: <FaClock size={18} />,
       gradient: "card-gradient-amber",
       progressColor: "text-violet-300",
-      topText: "Hours Logged",
-      mainValue: `${stats.totalHoursLogged}h`,
-      bottomText: `Estimated: ${totalEstimatedHours}h`,
-      progress: hoursLoggedProgress,
+      topText: "Focus time",
+      mainValue: formatDuration(stats.totalHoursLogged),
+      bottomText: totalEstimatedHours > 0 ? `Estimated: ${formatDuration(totalEstimatedHours)}` : "Tracked by the focus timer",
+      progress: pct(stats.totalHoursLogged, totalEstimatedHours),
     },
     {
       id: 4,
-      icon: <FaVideo size={18} />,
+      icon: <FaPlay size={16} />,
       gradient: "card-gradient-cyan",
       progressColor: "text-emerald-300",
-      topText: "Meetings Scheduled",
-      mainValue: `${stats.scheduled} Scheduled`,
-      bottomText: stats.scheduled > 0 ? `Status: Active` : `No meetings yet`,
-      progress: meetingsProgress,
+      topText: "In progress",
+      mainValue: stats.doing,
+      bottomText: stats.doing ? "Tasks you have started" : "Press Focus on a task to start",
+      progress: pct(stats.doing, stats.open),
     },
   ];
 

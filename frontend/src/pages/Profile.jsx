@@ -1,10 +1,11 @@
 import { useContext, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Loader2, Pencil, Sparkles } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
+import { LifeBuoy, Loader2, Pencil, Sparkles } from 'lucide-react'
 import { UserContext } from '../context/UserContext'
 import { TaskContext } from '../context/BillContext'
 import { getErrorMessage } from '../utils/apiClient'
 import Layout from '../components/Layout'
+import SubscriptionCard from '../components/SubscriptionCard'
 
 const inputClass = 'glass-input w-full px-4 py-2.5 rounded-lg'
 
@@ -18,6 +19,9 @@ function Status({ msg }) {
 export default function Profile() {
   const { user, updateProfile, uploadAvatar, removeAvatar } = useContext(UserContext)
   const { tasks, getTaskStats } = useContext(TaskContext)
+  const location = useLocation()
+  // Set by the Billing page after a successful payment
+  const welcome = location.state?.welcome || ''
   const stats = getTaskStats()
 
   const [profile, setProfile] = useState({ name: '', email: '', gender: 'male', bio: '' })
@@ -38,6 +42,13 @@ export default function Profile() {
       })
     }
   }, [user])
+
+  // /profile#subscription (navbar PRO badge, after payment) scrolls to the subscription card
+  useEffect(() => {
+    if (location.hash === '#subscription' && user) {
+      document.getElementById('subscription')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [location.hash, user])
 
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0]
@@ -99,7 +110,7 @@ export default function Profile() {
   const profileStats = [
     { label: 'Tasks', value: tasks.length },
     { label: 'Completed', value: stats.completed },
-    { label: 'Logged', value: `${stats.totalHoursLogged}h` },
+    { label: 'Focus time', value: `${stats.totalHoursLogged}h` },
   ]
 
   return (
@@ -148,7 +159,7 @@ export default function Profile() {
             {user.bio && <p className='text-sm text-gray-300 mt-2'>{user.bio}</p>}
             {memberSince && <p className='text-xs text-gray-400 mt-2'>Member since {memberSince}</p>}
             <Link
-              to='/billing'
+              to={user.isPremium ? '/profile#subscription' : '/billing'}
               className={`inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
                 user.isPremium
                   ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/40 hover:bg-emerald-400/25'
@@ -158,7 +169,7 @@ export default function Profile() {
               <Sparkles size={12} />
               {user.complimentary
                 ? 'Premium (complimentary)'
-                : user.isPremium ? 'Premium plan · Manage' : 'Free plan · Upgrade to Premium'}
+                : user.isPremium ? 'Premium plan · Manage subscription' : 'Free plan · Upgrade to Premium'}
             </Link>
           </div>
 
@@ -171,6 +182,8 @@ export default function Profile() {
             ))}
           </div>
         </div>
+
+        <SubscriptionCard welcome={welcome} />
 
         {/* Edit profile */}
         <form onSubmit={handleProfileSubmit} className='glass-card rounded-2xl p-5 sm:p-6 space-y-4'>
@@ -208,6 +221,14 @@ export default function Profile() {
             </button>
           </div>
         </form>
+
+        <Link to='/help' className='glass-card rounded-2xl p-5 flex items-center gap-4 hover:border-white/20 transition-colors'>
+          <span className='w-10 h-10 shrink-0 rounded-xl bg-emerald-500/15 text-emerald-300 flex items-center justify-center'><LifeBuoy size={18} /></span>
+          <span className='flex-1'>
+            <span className='block text-white font-semibold'>Need help?</span>
+            <span className='block text-sm text-gray-400'>Send us a message. We reply by email, usually within a day.</span>
+          </span>
+        </Link>
       </div>
     </Layout>
   )

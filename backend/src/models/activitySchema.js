@@ -13,6 +13,14 @@ export const ACTIVITY_ACTIONS = [
   "tasks_bulk_deleted",
   "plan_upgraded",
   "plan_downgraded",
+  "subscription_cancelled",
+  "subscription_resumed",
+  "tasks_captured",
+  "day_planned",
+  "money_added",
+  "bill_paid",
+  "invoice_created",
+  "invoice_paid",
 ];
 
 const activitySchema = new mongoose.Schema(

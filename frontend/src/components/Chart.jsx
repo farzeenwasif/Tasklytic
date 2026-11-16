@@ -59,14 +59,15 @@ const Chart = () => {
     });
   }, []);
 
-  // Hours logged per month, grouped by due date
+  // Time spent per month. A task counts in the month it was finished (or last worked on).
   const data = useMemo(
     () =>
       months.map((m) => ({
         ...m,
         value: tasks.reduce((sum, task) => {
-          if (!task?.dueDate) return sum;
-          const d = new Date(task.dueDate);
+          const when = task?.completedAt || task?.updatedAt || task?.dueDate;
+          if (!when) return sum;
+          const d = new Date(when);
           return d.getMonth() === m.monthIndex && d.getFullYear() === m.year
             ? sum + (task.hoursLogged || 0)
             : sum;

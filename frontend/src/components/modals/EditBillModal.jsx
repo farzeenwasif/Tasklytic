@@ -1,82 +1,47 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { TASK_CATEGORIES, DEFAULT_CATEGORY } from '../../constants/taskOptions';
+import { TASK_STATUSES } from '../../constants/taskOptions';
+import TaskFields, { Pill, emptyTaskForm, taskFormPayload } from '../TaskFields';
+import { formatDuration } from '../../utils/taskUtils';
 
 export default function EditTaskModal({ isOpen, task, onClose, onUpdate }) {
-  const [formData, setFormData] = useState({
-    title: '',
-    assignee: '',
-    status: 'Ready to Assign',
-    priority: 'Medium',
-    hoursLogged: 0,
-    estimatedHours: '',
-    dueDate: '',
-    category: DEFAULT_CATEGORY,
-    description: '',
-  });
-
+  const [form, setForm] = useState(emptyTaskForm());
+  const [status, setStatus] = useState('To do');
+  const [hoursLogged, setHoursLogged] = useState('0');
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (task && isOpen) {
-      setFormData({
-        title: task.title || '',
-        assignee: task.assignee || '',
-        status: task.status || 'Ready to Assign',
-        priority: task.priority || 'Medium',
-        hoursLogged: task.hoursLogged ?? 0,
-        estimatedHours: task.estimatedHours ?? '',
-        dueDate: task.dueDate ? String(task.dueDate).slice(0, 10) : '',
-        category: task.category || DEFAULT_CATEGORY,
-        description: task.description || '',
-      });
+      setForm(emptyTaskForm(task));
+      setStatus(task.status || 'To do');
+      setHoursLogged(String(Math.round((task.hoursLogged || 0) * 100) / 100));
       setErrors({});
       setSubmitError('');
     }
   }, [task, isOpen]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-    // Clear error for this field
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: '',
-      }));
-    }
-  };
+  if (!isOpen || !task) return null;
 
-  const validateForm = () => {
-    const newErrors = {};
-    if (!formData.title.trim()) newErrors.title = 'Task title is required';
-    if (!formData.estimatedHours || formData.estimatedHours <= 0) newErrors.estimatedHours = 'Valid hours is required';
-    if (!formData.dueDate) newErrors.dueDate = 'Due date is required';
-    return newErrors;
+  const set = (name, value) => {
+    setForm((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const newErrors = validateForm();
+    if (!form.title.trim()) return setErrors({ title: 'Give the task a title' });
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
+    const changes = { ...taskFormPayload(form), status };
+    // Only send the time spent when it was edited, so a running timer is not overwritten
+    const hours = Math.max(0, parseFloat(hoursLogged) || 0);
+    if (hours !== Math.round((task.hoursLogged || 0) * 100) / 100) changes.hoursLogged = hours;
 
     setSubmitting(true);
     setSubmitError('');
     try {
-      await onUpdate({
-        ...formData,
-        estimatedHours: parseFloat(formData.estimatedHours),
-        hoursLogged: parseFloat(formData.hoursLogged) || 0,
-      });
+      await onUpdate(changes);
       onClose();
     } catch (err) {
       setSubmitError(err.response?.data?.message || 'Failed to update task');
@@ -85,184 +50,47 @@ export default function EditTaskModal({ isOpen, task, onClose, onUpdate }) {
     }
   };
 
-  if (!isOpen || !task) return null;
-
   return (
     <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
-      <div className="glass-panel modal-pop rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        {/* Header */}
+      <div className="glass-panel modal-pop rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 sticky top-0 z-10 glass-header">
-          <h2 className="text-xl sm:text-2xl font-bold text-white">Edit Task</h2>
-          <button
-            onClick={onClose}
-            type="button"
-            className="text-gray-400 hover:text-white transition-colors p-1"
-          >
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Edit task</h2>
+          <button onClick={onClose} type="button" aria-label="Close" className="text-gray-400 hover:text-white transition-colors p-1">
             <X size={24} />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Task Title */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Task Title *
-            </label>
-            <input
-              type="text"
-              name="title"
-              value={formData.title}
-              onChange={handleChange}
-              className="w-full px-4 py-2 glass-input rounded-lg"
-            />
-            {errors.title && <p className="text-red-400 text-sm mt-1">{errors.title}</p>}
-          </div>
-
-          {/* Assigned to/}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Assignee *
-            </label>
-            <input
-              type="text"
-              name="assignee"
-              value={formData.assignee}
-              onChange={handleChange}
-              className="w-full px-4 py-2 glass-input rounded-lg"
-            />
-            {errors.assignee && <p className="text-red-400 text-sm mt-1">{errors.assignee}</p>}
-          </div>
-
-          {/* Priority and Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} noValidate className="p-6 space-y-5">
+          <TaskFields form={form} set={set} errors={errors}>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Priority
-              </label>
-              <select
-                name="priority"
-                value={formData.priority}
-                onChange={handleChange}
-                className="w-full px-4 py-2 glass-input rounded-lg"
-              >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Status
-              </label>
-              <select
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                className="w-full px-4 py-2 glass-input rounded-lg"
-              >
-                <option value="Ready to Assign">Ready to Assign</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="Scheduled">Scheduled</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Hours */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Hours Logged
-              </label>
-              <input
-                type="number"
-                name="hoursLogged"
-                value={formData.hoursLogged}
-                onChange={handleChange}
-                step="0.5"
-                className="w-full px-4 py-2 glass-input rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Estimated Hours *
-              </label>
-              <input
-                type="number"
-                name="estimatedHours"
-                value={formData.estimatedHours}
-                onChange={handleChange}
-                step="0.5"
-                className="w-full px-4 py-2 glass-input rounded-lg"
-              />
-              {errors.estimatedHours && <p className="text-red-400 text-sm mt-1">{errors.estimatedHours}</p>}
-            </div>
-          </div>
-
-          {/* Category and Due Date */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Category
-              </label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleChange}
-                className="w-full px-4 py-2 glass-input rounded-lg"
-              >
-                {TASK_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+              <p className="block text-sm font-medium text-gray-300 mb-1.5">Status</p>
+              <div className="grid grid-cols-3 gap-2 max-w-sm">
+                {TASK_STATUSES.map((s) => (
+                  <Pill key={s} active={status === s} onClick={() => setStatus(s)}>{s}</Pill>
                 ))}
-              </select>
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Due Date *
+              <label htmlFor="hoursLogged" className="block text-sm font-medium text-gray-300 mb-1.5">
+                Time spent <span className="text-gray-500 font-normal">(hours; the Focus timer fills this in)</span>
               </label>
-              <input
-                type="date"
-                name="dueDate"
-                value={formData.dueDate}
-                onChange={handleChange}
-                className="w-full px-4 py-2 glass-input rounded-lg"
-              />
-              {errors.dueDate && <p className="text-red-400 text-sm mt-1">{errors.dueDate}</p>}
+              <div className="flex items-center gap-3">
+                <input
+                  id="hoursLogged" type="number" min="0" step="0.25" value={hoursLogged}
+                  onChange={(e) => setHoursLogged(e.target.value)}
+                  className="glass-input w-28 px-3 py-2 rounded-xl text-sm"
+                />
+                <span className="text-sm text-gray-400">{formatDuration(parseFloat(hoursLogged) || 0)}</span>
+              </div>
             </div>
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Description
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows="3"
-              className="w-full px-4 py-2 glass-input rounded-lg resize-none"
-            />
-          </div>
+          </TaskFields>
 
           {submitError && <p className="text-red-400 text-sm">{submitError}</p>}
 
-          {/* Buttons */}
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 btn-ghost"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 px-4 py-2 btn-primary"
-            >
-              {submitting ? 'Updating...' : 'Update Task'}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 btn-ghost">Cancel</button>
+            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2 btn-primary">
+              {submitting ? 'Saving...' : 'Save'}
             </button>
           </div>
         </form>

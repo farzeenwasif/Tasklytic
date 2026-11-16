@@ -9,7 +9,7 @@ const AmountCard = () => {
   // Calculate hours progress
   const totalEstimatedHours = tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0);
   const hoursCompleted = stats.totalHoursLogged;
-  const hoursRemaining = Math.max(0, totalEstimatedHours - hoursCompleted);
+  const hoursRemaining = Math.round(Math.max(0, totalEstimatedHours - hoursCompleted) * 10) / 10;
   
   const percent = totalEstimatedHours > 0 ? Math.min(100, Math.round((hoursCompleted / totalEstimatedHours) * 100)) : 0;
   const radius = 65;
@@ -102,10 +102,10 @@ const AmountCard = () => {
           <path d="M12 7v5l4 2" stroke="#fff" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
         </svg>
         <div className="text-[#A1A1A1] font-semibold text-[17px] opacity-80 mb-2 mt-1">
-          Hours Analytics
+          Focus time
         </div>
         <div className="text-white flex font-extrabold text-[0.9rem] gap-1 tracking-wide mb-1">
-          <p className="text-[#A1A1A1]">Logged:</p> {hoursCompleted}h
+          <p className="text-[#A1A1A1]">Focused:</p> {hoursCompleted}h
         </div>
         <div className="text-white font-semibold text-[16px] opacity-80 flex gap-1 items-center">
           <p className="text-xs text-[#A1A1A1]">Remaining :</p>{hoursRemaining}h

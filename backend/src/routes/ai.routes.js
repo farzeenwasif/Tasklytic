@@ -7,7 +7,13 @@ import {
   writeDescription,
   getInsights,
   getDailyBriefing,
+  brainDump,
+  imageToTasks,
+  planDay,
+  scanReceipt,
+  financeInsights,
 } from "../controllers/ai.controller.js";
+import { aiImageUpload } from "../middlewares/multer.middleware.js";
 
 const router = express.Router();
 
@@ -19,5 +25,10 @@ router.post("/subtasks", suggestSubtasks);
 router.post("/describe", writeDescription);
 router.get("/insights", getInsights);
 router.get("/briefing", getDailyBriefing);
+router.post("/brain-dump", brainDump);
+router.post("/image-tasks", aiImageUpload.single("image"), imageToTasks);
+router.post("/plan-day", planDay);
+router.post("/receipt", aiImageUpload.single("image"), scanReceipt);
+router.get("/finance-insights", financeInsights);
 
 export default router;

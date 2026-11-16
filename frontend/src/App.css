@@ -181,3 +181,12 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .modal-overlay, .modal-pop { animation: none; }
 }
+
+/* Printing an invoice: only the invoice page, on plain white paper */
+@media print {
+  body:has(.invoice-print-root) > *:not(.invoice-print-root) { display: none !important; }
+  .invoice-print-root { position: static !important; inset: auto !important; padding: 0 !important; background: none !important; backdrop-filter: none !important; overflow: visible !important; }
+  .invoice-print-root .invoice-page { box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; }
+  .invoice-print-root input, .invoice-print-root textarea { border: 0 !important; padding: 0 !important; resize: none; }
+  body { background: #fff !important; }
+}

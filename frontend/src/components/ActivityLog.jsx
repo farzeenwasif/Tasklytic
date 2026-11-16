@@ -7,6 +7,9 @@ import {
   Pencil,
   PlusCircle,
   Sparkles,
+  Wallet,
+  FileText,
+  Sun,
   Trash2,
   UserCog,
   UserPlus,
@@ -28,6 +31,14 @@ const ACTION_STYLE = {
   tasks_bulk_deleted: { icon: Trash2, cls: 'bg-red-500/20 text-red-300' },
   plan_upgraded: { icon: Sparkles, cls: 'bg-emerald-400/15 text-emerald-300' },
   plan_downgraded: { icon: Sparkles, cls: 'bg-white/10 text-zinc-300' },
+  subscription_cancelled: { icon: Sparkles, cls: 'bg-red-500/20 text-red-300' },
+  subscription_resumed: { icon: Sparkles, cls: 'bg-emerald-400/15 text-emerald-300' },
+  tasks_captured: { icon: Sparkles, cls: 'bg-emerald-400/15 text-emerald-300' },
+  day_planned: { icon: Sun, cls: 'bg-amber-400/15 text-amber-300' },
+  money_added: { icon: Wallet, cls: 'bg-white/10 text-zinc-300' },
+  bill_paid: { icon: Wallet, cls: 'bg-emerald-400/15 text-emerald-300' },
+  invoice_created: { icon: FileText, cls: 'bg-violet-400/15 text-violet-300' },
+  invoice_paid: { icon: FileText, cls: 'bg-emerald-400/15 text-emerald-300' },
 }
 
 const timeAgo = (date) => {

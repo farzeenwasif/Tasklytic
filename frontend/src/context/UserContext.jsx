@@ -102,6 +102,26 @@ export function UserProvider({ children }) {
     return u;
   }, [setUser]);
 
+  // Turn Premium auto-renew off / back on
+  const cancelSubscription = useCallback(async () => {
+    const u = await billingApi.cancelSubscription();
+    setUser(u);
+    return u;
+  }, [setUser]);
+
+  const resumeSubscription = useCallback(async () => {
+    const u = await billingApi.resumeSubscription();
+    setUser(u);
+    return u;
+  }, [setUser]);
+
+  // After the in-app card form: save the new card (may also settle a failed payment)
+  const saveCard = useCallback(async (setupIntentId) => {
+    const result = await billingApi.saveCard(setupIntentId);
+    setUser(result.user);
+    return result;
+  }, [setUser]);
+
   const removeAvatar = useCallback(async () => {
     const u = await authApi.removeAvatar();
     setUser(u);
@@ -121,6 +141,9 @@ export function UserProvider({ children }) {
         uploadAvatar,
         removeAvatar,
         syncSubscription,
+        cancelSubscription,
+        resumeSubscription,
+        saveCard,
         isPremium: !!user?.isPremium,
       }}
     >

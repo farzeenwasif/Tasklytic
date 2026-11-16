@@ -1,14 +1,27 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Lock, Loader2, RefreshCw, Sparkles, Square, Volume2 } from 'lucide-react'
+import { Lock, Loader2, RefreshCw, Sparkles, Square, Volume2, VolumeX } from 'lucide-react'
 import { UserContext } from '../context/UserContext'
 import { getDailyBriefing, getInsights, localToday } from '../services/aiService'
+import { getBriefing } from '../services/taskService'
 import { getErrorMessage } from '../utils/apiClient'
 
-// Set by the login page; the dashboard reads the briefing aloud once, right after login
+// Set by the login page; the dashboard loads the briefing once, right after login
+// (and reads it aloud only if the user has unmuted it)
 export const BRIEFING_FLAG = 'tasklytic:play-briefing'
 const INSIGHTS_CACHE = 'tasklytic:insights'
 const INSIGHTS_TTL = 60 * 60 * 1000 // refresh at most hourly unless asked
+// Briefing is silent by default; the speaker icon turns it on (remembered on this device)
+const BRIEFING_SOUND = 'tasklytic:briefing-sound'
+
+const soundPref = {
+  get() {
+    try { return localStorage.getItem(BRIEFING_SOUND) === 'on' } catch { return false }
+  },
+  set(on) {
+    try { localStorage.setItem(BRIEFING_SOUND, on ? 'on' : 'off') } catch { /* storage blocked */ }
+  },
+}
 
 const storage = {
   get(key) {
@@ -34,16 +47,17 @@ const pickVoice = () => {
   )
 }
 
+// Shown to Free users in place of the AI insights
 function UpgradeCard() {
   return (
-    <div className='glass-card rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4 border-emerald-400/20'>
+    <div className='flex flex-col sm:flex-row lg:flex-col xl:flex-row sm:items-center lg:items-start xl:items-center gap-4 lg:border-l lg:border-white/10 lg:pl-6'>
       <span className='w-11 h-11 shrink-0 rounded-xl bg-emerald-500/15 text-emerald-300 flex items-center justify-center'>
         <Lock size={20} />
       </span>
       <div className='flex-1'>
         <p className='text-white font-semibold'>Unlock your AI assistant</p>
         <p className='text-sm text-gray-400 mt-0.5'>
-          Weekly insights, a spoken daily briefing, tasks from a sentence and more with Premium.
+          Weekly insights, an AI-written briefing, steps and descriptions written for you, and more with Premium.
         </p>
       </div>
       <Link to='/billing' className='btn-primary px-4 py-2.5 shrink-0'>
@@ -63,6 +77,7 @@ export default function AIAssistant() {
   const [briefingLoading, setBriefingLoading] = useState(false)
   const [briefingError, setBriefingError] = useState('')
   const [speaking, setSpeaking] = useState(false)
+  const [soundOn, setSoundOn] = useState(soundPref.get)
   const autoPlayed = useRef(false)
 
   const loadInsights = useCallback(async (force = false) => {
@@ -106,37 +121,45 @@ export default function AIAssistant() {
     setSpeaking(false)
   }
 
-  const playBriefing = useCallback(async () => {
+  // aloud = false only loads the text (silent auto-load after login)
+  const playBriefing = useCallback(async (aloud = true) => {
     setBriefingError('')
     // reuse today's text if we already have it
-    if (briefing) return speak(briefing)
+    if (briefing) return aloud && speak(briefing)
     setBriefingLoading(true)
     try {
-      const { text } = await getDailyBriefing()
+      // Premium: written by AI. Free: the same facts from a template (no AI involved).
+      const { text } = await (isPremium ? getDailyBriefing() : getBriefing(localToday(), new Date().getHours()))
       setBriefing(text)
-      speak(text)
+      if (aloud) speak(text)
     } catch (err) {
       setBriefingError(getErrorMessage(err, 'Could not load your briefing'))
     } finally {
       setBriefingLoading(false)
     }
-  }, [briefing, speak])
+  }, [briefing, speak, isPremium])
 
   useEffect(() => {
-    if (!isPremium) return
-    loadInsights()
-    // Auto-play once after login (the login click lets the browser play audio)
+    if (isPremium) loadInsights()
+    // Load once after login; speak only if the user unmuted it
+    // (the login click lets the browser play audio)
     if (!autoPlayed.current && storage.get(BRIEFING_FLAG)) {
       autoPlayed.current = true
       storage.remove(BRIEFING_FLAG)
-      playBriefing()
+      playBriefing(soundPref.get())
     }
   }, [isPremium, loadInsights, playBriefing])
 
   // stop talking when leaving the dashboard
   useEffect(() => () => { if (canSpeak) window.speechSynthesis.cancel() }, [])
 
-  if (!isPremium) return <UpgradeCard />
+  const toggleSound = () => {
+    const next = !soundOn
+    setSoundOn(next)
+    soundPref.set(next)
+    if (next) playBriefing(true)
+    else stop()
+  }
 
   return (
     <div className='glass-card rounded-2xl p-5 sm:p-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]'>
@@ -147,9 +170,28 @@ export default function AIAssistant() {
             <Volume2 size={16} />
           </span>
           <h3 className='text-white font-semibold'>Daily briefing</h3>
+          {canSpeak && (
+            <button
+              type='button'
+              onClick={toggleSound}
+              aria-pressed={soundOn}
+              aria-label={soundOn ? 'Mute daily briefing' : 'Unmute daily briefing'}
+              title={soundOn ? 'Sound on: reads aloud after login. Click to mute.' : 'Muted. Click to hear the briefing.'}
+              className={`ml-auto w-8 h-8 rounded-lg flex items-center justify-center border transition-colors ${
+                soundOn
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/40 hover:bg-emerald-500/25'
+                  : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+          )}
         </div>
         <p className='text-sm text-gray-300 leading-relaxed min-h-[3rem]'>
-          {briefing || 'Hear what is on your plate today. It plays automatically after you log in.'}
+          {briefing ||
+            (soundOn
+              ? 'Hear what is on your plate today. It plays automatically after you log in.'
+              : 'Your plan for today. Tap the speaker icon to hear it aloud.')}
         </p>
         {briefingError && <p className='text-xs text-red-400'>{briefingError}</p>}
         <div className='flex gap-2'>
@@ -158,7 +200,7 @@ export default function AIAssistant() {
               <Square size={14} /> Stop
             </button>
           ) : (
-            <button type='button' onClick={playBriefing} disabled={briefingLoading || !canSpeak} className='btn-primary px-4 py-2'>
+            <button type='button' onClick={() => playBriefing(true)} disabled={briefingLoading || !canSpeak} className='btn-primary px-4 py-2'>
               {briefingLoading ? <Loader2 size={16} className='animate-spin' /> : <Volume2 size={16} />}
               {briefingLoading ? 'Preparing...' : 'Play briefing'}
             </button>
@@ -174,7 +216,8 @@ export default function AIAssistant() {
         {!canSpeak && <p className='text-xs text-gray-500'>Your browser can't read text aloud.</p>}
       </div>
 
-      {/* Weekly insights */}
+      {/* Weekly insights (Premium) */}
+      {!isPremium ? <UpgradeCard /> : (
       <div className='flex flex-col gap-3 lg:border-l lg:border-white/10 lg:pl-6'>
         <div className='flex items-center justify-between gap-2'>
           <div className='flex items-center gap-2'>
@@ -229,6 +272,7 @@ export default function AIAssistant() {
           </>
         )}
       </div>
+      )}
     </div>
   )
 }

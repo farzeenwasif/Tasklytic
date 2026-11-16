@@ -2,12 +2,16 @@ import { NavLink } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import FolderIcon from '@mui/icons-material/Folder';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+import WbSunnyIcon from '@mui/icons-material/WbSunny';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
 // Profile is reached from the avatar in the top bar, so it isn't listed here
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: <DashboardIcon />, end: true },
+  { to: '/today', label: 'My Day', icon: <WbSunnyIcon /> },
   { to: '/tasks', label: 'All Tasks', icon: <FolderIcon />, end: true },
   { to: '/tasks/add', label: 'Add Task', icon: <CreateNewFolderIcon /> },
+  { to: '/finance', label: 'Finance', icon: <AccountBalanceWalletIcon /> },
 ];
 
 const linkClass = ({ isActive }) =>

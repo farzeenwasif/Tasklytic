@@ -1,10 +1,13 @@
-import { CalendarDays, Edit2, Eye, Trash2 } from 'lucide-react';
+import { useContext, useEffect, useState } from 'react';
+import { CalendarDays, Check, Edit2, ListChecks, Pause, Play, Repeat, Trash2 } from 'lucide-react';
+import { TaskContext } from '../context/BillContext';
+import { REPEAT_LABEL } from '../constants/taskOptions';
+import { dueInfo, formatClock, formatDuration, isDone } from '../utils/taskUtils';
 
 export const STATUS_STYLES = {
-  Completed: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
-  'In Progress': 'bg-blue-500/15 text-blue-300 border-blue-500/40',
-  'Ready to Assign': 'bg-purple-500/15 text-purple-300 border-purple-500/40',
-  Scheduled: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40',
+  Done: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
+  Doing: 'bg-blue-500/15 text-blue-300 border-blue-500/40',
+  'To do': 'bg-white/10 text-gray-300 border-white/15',
 };
 
 export const PRIORITY_STYLES = {
@@ -20,39 +23,16 @@ const PRIORITY_ACCENT = {
   Low: 'bg-emerald-400',
 };
 
-const FALLBACK_STYLE = 'bg-gray-500/15 text-gray-300 border-gray-500/40';
-
-// Due dates are stored as YYYY-MM-DD; read them as local dates so they don't shift a day
-export const parseDueDate = (value) => {
-  if (!value) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  const d = m ? new Date(+m[1], m[2] - 1, +m[3]) : new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-
-function dueInfo(task) {
-  const due = parseDueDate(task.dueDate);
-  if (!due) return { label: 'No due date', tone: 'text-gray-400' };
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const days = Math.round((due - today) / 86400000);
-  const date = due.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  if (task.status === 'Completed') return { label: date, tone: 'text-gray-400' };
-  if (days < 0) return { label: `${date} · overdue`, tone: 'text-red-400' };
-  if (days === 0) return { label: 'Due today', tone: 'text-amber-300' };
-  if (days === 1) return { label: 'Due tomorrow', tone: 'text-amber-300' };
-  return { label: date, tone: 'text-gray-300' };
-}
-
-const initials = (name = '') =>
-  name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('') || '?';
-
-function Chip({ className, children }) {
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${className}`}>
-      {children}
-    </span>
-  );
+// Seconds since the focus timer started, ticking every second while it runs
+export function useElapsed(startedAt) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!startedAt) return undefined;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  return startedAt ? Math.max(0, (now - new Date(startedAt).getTime()) / 1000) : 0;
 }
 
 function IconButton({ onClick, title, danger, children }) {
@@ -71,22 +51,97 @@ function IconButton({ onClick, title, danger, children }) {
   );
 }
 
-// One task as a card. Without the action handlers (e.g. the Add Task preview) it renders read-only.
-export default function TaskCard({ task, selected = false, onToggleSelect, onView, onEdit, onDelete }) {
-  const logged = Number(task.hoursLogged) || 0;
-  const estimated = Number(task.estimatedHours) || 0;
-  const progress = estimated > 0 ? Math.min(100, (logged / estimated) * 100) : 0;
-  const overBudget = estimated > 0 && logged > estimated;
+// The round "tick it off" button
+export function DoneButton({ task, onError, size = 'w-6 h-6' }) {
+  const { toggleDone } = useContext(TaskContext);
+  const [busy, setBusy] = useState(false);
+  const done = isDone(task);
+  const click = async (e) => {
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    try {
+      await toggleDone(task);
+    } catch (err) {
+      onError?.(err.response?.data?.message || 'Could not update the task');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={click}
+      disabled={busy}
+      aria-pressed={done}
+      aria-label={done ? `Mark "${task.title}" as not done` : `Mark "${task.title}" as done`}
+      title={done ? 'Mark as not done' : 'Mark as done'}
+      className={`${size} shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
+        done
+          ? 'bg-emerald-400 border-emerald-400 text-[#0b0b0c]'
+          : 'border-gray-500 text-transparent hover:border-emerald-400 hover:text-emerald-400'
+      } ${busy ? 'opacity-60' : ''}`}
+    >
+      <Check size={14} strokeWidth={3} />
+    </button>
+  );
+}
+
+// Start / pause the focus timer; shows the running clock
+export function FocusButton({ task, onError }) {
+  const { startTimer, stopTimer } = useContext(TaskContext);
+  const [busy, setBusy] = useState(false);
+  const running = Boolean(task.timerStartedAt);
+  const elapsed = useElapsed(task.timerStartedAt);
+  if (isDone(task)) return null;
+
+  const click = async (e) => {
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    try {
+      await (running ? stopTimer(task.id) : startTimer(task.id));
+    } catch (err) {
+      onError?.(err.response?.data?.message || 'Could not update the timer');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={click}
+      disabled={busy}
+      title={running ? 'Pause the focus timer' : 'Start a focus timer on this task'}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+        running
+          ? 'bg-emerald-400 text-[#0b0b0c] border-emerald-400'
+          : 'bg-white/5 text-gray-200 border-white/15 hover:bg-white/10'
+      } ${busy ? 'opacity-60' : ''}`}
+    >
+      {running ? <Pause size={12} /> : <Play size={12} />}
+      {running ? <span className="tabular-nums">{formatClock(elapsed)}</span> : 'Focus'}
+    </button>
+  );
+}
+
+// One task as a card
+export default function TaskCard({ task, selected = false, onToggleSelect, onView, onEdit, onDelete, onError }) {
+  const done = isDone(task);
   const due = dueInfo(task);
-  const interactive = Boolean(onView || onEdit || onDelete);
+  const elapsed = useElapsed(task.timerStartedAt);
+  const spent = (Number(task.hoursLogged) || 0) + elapsed / 3600;
+  const estimated = Number(task.estimatedHours) || 0;
+  const steps = task.subtasks || [];
+  const stepsDone = steps.filter((s) => s.done).length;
 
   return (
     <article
-      className={`glass-card relative overflow-hidden rounded-2xl p-5 flex flex-col gap-4 transition-all duration-200 ${
-        interactive ? 'hover:-translate-y-0.5 hover:border-white/20' : ''
-      } ${selected ? 'ring-2 ring-emerald-400/70' : ''}`}
+      className={`glass-card relative overflow-hidden rounded-2xl p-5 flex flex-col gap-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 ${
+        selected ? 'ring-2 ring-emerald-400/70' : ''
+      } ${done ? 'opacity-70' : ''}`}
     >
-      <span className={`absolute left-0 top-0 bottom-0 w-1 ${PRIORITY_ACCENT[task.priority] || 'bg-gray-500'}`} />
+      <span className={`absolute left-0 top-0 bottom-0 w-1 ${done ? 'bg-gray-600' : PRIORITY_ACCENT[task.priority] || 'bg-gray-500'}`} />
 
       {/* top row: select, category, actions */}
       <div className="flex items-center justify-between gap-2">
@@ -97,70 +152,72 @@ export default function TaskCard({ task, selected = false, onToggleSelect, onVie
               checked={selected}
               onChange={onToggleSelect}
               aria-label={`Select ${task.title}`}
-              className="accent-emerald-500 cursor-pointer w-4 h-4"
+              className="accent-emerald-500 cursor-pointer w-3.5 h-3.5"
             />
           )}
-          <span className="text-[11px] uppercase tracking-wider text-gray-400 truncate">
-            {task.category || 'Uncategorized'}
+          <span className="text-[11px] uppercase tracking-wider text-gray-400 truncate">{task.category}</span>
+          {!done && task.priority === 'High' && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-300">HIGH</span>
+          )}
+          {task.repeat && task.repeat !== 'none' && (
+            <span className="text-gray-400" title={REPEAT_LABEL[task.repeat]}><Repeat size={12} /></span>
+          )}
+        </div>
+        <div className="flex items-center -mr-1.5">
+          {onEdit && <IconButton onClick={onEdit} title="Edit"><Edit2 size={15} /></IconButton>}
+          {onDelete && <IconButton onClick={onDelete} title="Delete" danger><Trash2 size={15} /></IconButton>}
+        </div>
+      </div>
+
+      {/* tick + title */}
+      <div className="flex items-start gap-3 min-w-0">
+        <div className="pt-0.5"><DoneButton task={task} onError={onError} /></div>
+        <div className="min-w-0 flex-1">
+          <h4
+            className={`font-semibold text-lg leading-snug break-words ${done ? 'line-through text-gray-400' : 'text-white'} ${
+              onView ? 'cursor-pointer hover:underline underline-offset-4' : ''
+            }`}
+            onClick={onView}
+          >
+            {task.title || 'Untitled task'}
+          </h4>
+          {task.description && (
+            <p className="text-sm text-gray-400 mt-1 line-clamp-2 break-words">{task.description}</p>
+          )}
+        </div>
+      </div>
+
+      {/* steps */}
+      {steps.length > 0 && (
+        <button type="button" onClick={onView} className="flex items-center gap-2 text-xs text-gray-300 text-left">
+          <ListChecks size={14} className="text-gray-400 shrink-0" />
+          <span className="h-1.5 flex-1 rounded-full bg-white/10 overflow-hidden">
+            <span
+              className="block h-full rounded-full bg-emerald-400 transition-all duration-500"
+              style={{ width: `${(stepsDone / steps.length) * 100}%` }}
+            />
           </span>
-        </div>
-        {interactive && (
-          <div className="flex items-center -mr-1.5">
-            {onView && <IconButton onClick={onView} title="View"><Eye size={16} /></IconButton>}
-            {onEdit && <IconButton onClick={onEdit} title="Edit"><Edit2 size={16} /></IconButton>}
-            {onDelete && <IconButton onClick={onDelete} title="Delete" danger><Trash2 size={16} /></IconButton>}
-          </div>
-        )}
-      </div>
+          <span className="tabular-nums">{stepsDone}/{steps.length}</span>
+        </button>
+      )}
 
-      {/* title and description */}
-      <div className="min-w-0">
-        <h4
-          className={`text-white font-semibold text-lg leading-snug break-words ${onView ? 'cursor-pointer hover:underline underline-offset-4' : ''}`}
-          onClick={onView}
-        >
-          {task.title || 'Untitled task'}
-        </h4>
-        {task.description && (
-          <p className="text-sm text-gray-400 mt-1 line-clamp-2 break-words">{task.description}</p>
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Chip className={STATUS_STYLES[task.status] || FALLBACK_STYLE}>{task.status}</Chip>
-        <Chip className={PRIORITY_STYLES[task.priority] || FALLBACK_STYLE}>{task.priority} priority</Chip>
-      </div>
-
-      {/* hours progress */}
-      <div className="mt-auto">
-        <div className="flex justify-between text-xs mb-1.5">
-          <span className="text-gray-400">Progress</span>
-          <span className={overBudget ? 'text-red-400 font-semibold' : 'text-gray-200 font-semibold'}>
-            {logged}/{estimated}h
-          </span>
-        </div>
-        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${overBudget ? 'bg-red-400' : 'bg-emerald-400'}`}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-
-      {/* footer: due date and assignee */}
-      <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/10">
-        <span className={`flex items-center gap-1.5 text-xs ${due.tone}`}>
-          <CalendarDays size={14} />
-          {due.label}
+      {/* footer: due date, time spent, focus timer */}
+      <div className="mt-auto flex items-center justify-between gap-3 pt-3 border-t border-white/10">
+        <span className={`flex items-center gap-1.5 text-xs min-w-0 ${due.tone}`}>
+          <CalendarDays size={14} className="shrink-0" />
+          <span className="truncate">{due.label}</span>
         </span>
-        {task.assignee && (
-          <span className="flex items-center gap-2 min-w-0" title={task.assignee}>
-            <span className="text-xs text-gray-400 truncate max-w-[110px]">{task.assignee}</span>
-            <span className="w-7 h-7 shrink-0 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-[11px] font-bold flex items-center justify-center">
-              {initials(task.assignee)}
+        <span className="flex items-center gap-2 shrink-0">
+          {(spent > 0 || estimated > 0) && (
+            <span
+              className={`text-xs tabular-nums ${estimated > 0 && spent > estimated ? 'text-red-400' : 'text-gray-400'}`}
+              title={estimated > 0 ? 'Time spent / estimate' : 'Time spent'}
+            >
+              {formatDuration(spent)}{estimated > 0 ? ` / ${formatDuration(estimated)}` : ''}
             </span>
-          </span>
-        )}
+          )}
+          <FocusButton task={task} onError={onError} />
+        </span>
       </div>
     </article>
   );

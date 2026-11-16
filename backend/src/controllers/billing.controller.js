@@ -84,19 +84,6 @@ export const createCheckoutSession = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { client_secret: session.client_secret }, "Checkout started"));
 });
 
-// Stripe's hosted page to update the card or cancel
-export const createPortalSession = asyncHandler(async (req, res) => {
-  const stripe = getStripe();
-  const customer = req.user.subscription?.stripeCustomerId;
-  if (!customer) throw new ApiError(400, "No subscription found for this account");
-
-  const session = await stripe.billingPortal.sessions.create({
-    customer,
-    return_url: `${getFrontendUrl()}/billing`,
-  });
-  return res.status(200).json(new ApiResponse(200, { url: session.url }, "Portal opened"));
-});
-
 // Re-read the subscription from Stripe. Called after checkout so Premium shows up
 // right away even if the webhook hasn't arrived yet.
 export const syncSubscription = asyncHandler(async (req, res) => {
@@ -173,3 +160,126 @@ export const handleStripeWebhook = async (req, res) => {
     return res.status(500).json({ received: false });
   }
 };
+
+// Turn auto-renew off or back on. Premium stays until the end of the paid period either way;
+// the webhook (customer.subscription.deleted) switches the plan to Free when the period ends.
+const setCancelAtPeriodEnd = (cancel) =>
+  asyncHandler(async (req, res) => {
+    const stripe = getStripe();
+    const user = await User.findById(req.user._id);
+
+    let sub = user.subscription?.stripeSubscriptionId
+      ? await stripe.subscriptions.retrieve(user.subscription.stripeSubscriptionId)
+      : await findLatestSubscription(stripe, user);
+    if (!sub || ["canceled", "incomplete_expired"].includes(sub.status)) {
+      throw new ApiError(400, "No active subscription to change");
+    }
+
+    if (Boolean(sub.cancel_at_period_end) !== cancel) {
+      sub = await stripe.subscriptions.update(sub.id, { cancel_at_period_end: cancel });
+      await logActivity(
+        user._id,
+        cancel ? "subscription_cancelled" : "subscription_resumed",
+        cancel ? "Cancelled Premium; it stays active until the end of the billing period" : "Resumed Premium auto-renewal"
+      );
+    }
+
+    applySubscriptionToUser(user, sub);
+    await user.save();
+    return res
+      .status(200)
+      .json(new ApiResponse(200, user, cancel ? "Subscription cancelled" : "Subscription resumed"));
+  });
+
+export const cancelSubscription = setCancelAtPeriodEnd(true);
+export const resumeSubscription = setCancelAtPeriodEnd(false);
+
+// ---- Card on file (updated in the app with a SetupIntent; nothing is charged) ----
+
+const cardSummary = (pm) =>
+  pm?.card
+    ? { brand: pm.card.brand, last4: pm.card.last4, expMonth: pm.card.exp_month, expYear: pm.card.exp_year }
+    : null;
+
+// The card Stripe charges for renewals: the subscription's own default, else the customer's
+const getDefaultCard = async (stripe, user) => {
+  const customerId = user.subscription?.stripeCustomerId;
+  if (!customerId) return null;
+  const subId = user.subscription?.stripeSubscriptionId;
+  if (subId) {
+    const sub = await stripe.subscriptions.retrieve(subId, { expand: ["default_payment_method"] });
+    if (sub.default_payment_method?.card) return cardSummary(sub.default_payment_method);
+  }
+  const customer = await stripe.customers.retrieve(customerId, {
+    expand: ["invoice_settings.default_payment_method"],
+  });
+  return cardSummary(customer.invoice_settings?.default_payment_method);
+};
+
+export const getPaymentMethod = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+  const card = await getDefaultCard(getStripe(), user);
+  return res.status(200).json(new ApiResponse(200, { card }, "Card loaded"));
+});
+
+// Step 1: a SetupIntent the in-app card form confirms
+export const createCardSetup = asyncHandler(async (req, res) => {
+  const stripe = getStripe();
+  const customer = req.user.subscription?.stripeCustomerId;
+  if (!customer) throw new ApiError(400, "No subscription found for this account");
+
+  const intent = await stripe.setupIntents.create({
+    customer,
+    usage: "off_session",
+    metadata: { userId: String(req.user._id) },
+  });
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { client_secret: intent.client_secret }, "Card form ready"));
+});
+
+// Step 2: after the form confirms, make the new card the default for renewals.
+// If the last payment failed (past_due), retry that invoice with the new card right away.
+export const saveCard = asyncHandler(async (req, res) => {
+  const stripe = getStripe();
+  const { setupIntentId } = req.body || {};
+  if (!setupIntentId || typeof setupIntentId !== "string") throw new ApiError(400, "setupIntentId is required");
+
+  const user = await User.findById(req.user._id);
+  const customerId = user.subscription?.stripeCustomerId;
+  const intent = await stripe.setupIntents.retrieve(setupIntentId);
+  const intentCustomer = typeof intent.customer === "string" ? intent.customer : intent.customer?.id;
+  if (!customerId || intentCustomer !== customerId) throw new ApiError(403, "This card setup does not belong to you");
+  if (intent.status !== "succeeded") throw new ApiError(400, "The card has not been confirmed yet");
+
+  const pmId = typeof intent.payment_method === "string" ? intent.payment_method : intent.payment_method?.id;
+  await stripe.customers.update(customerId, { invoice_settings: { default_payment_method: pmId } });
+
+  let paymentRetry = null; // "paid" | "failed" | null (nothing was due)
+  const subId = user.subscription?.stripeSubscriptionId;
+  if (subId) {
+    let sub = await stripe.subscriptions.update(subId, { default_payment_method: pmId });
+
+    const invoiceId = typeof sub.latest_invoice === "string" ? sub.latest_invoice : sub.latest_invoice?.id;
+    if (sub.status === "past_due" && invoiceId) {
+      const invoice = await stripe.invoices.retrieve(invoiceId);
+      if (invoice.status === "open") {
+        try {
+          await stripe.invoices.pay(invoiceId, { payment_method: pmId });
+          paymentRetry = "paid";
+        } catch (err) {
+          console.error("Retrying the failed invoice did not work:", err.message);
+          paymentRetry = "failed";
+        }
+        sub = await stripe.subscriptions.retrieve(subId);
+      }
+    }
+    applySubscriptionToUser(user, sub);
+    await user.save();
+  }
+
+  const pm = await stripe.paymentMethods.retrieve(pmId);
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { user, card: cardSummary(pm), paymentRetry }, "Card updated"));
+});
