@@ -13,9 +13,12 @@ import Signup from '../pages/Signup'
 import ForgotPassword from '../pages/ForgotPassword'
 import ResetPassword from '../pages/ResetPassword'
 import { ProtectedRoute, PublicOnlyRoute } from './ProtectedRoute'
+import RouteMeta from './RouteMeta'
 
 export default function Router() {
   return (
+    <>
+    <RouteMeta />
     <Routes>
       {/* Logged-out only: logged-in users are sent to /dashboard until they sign out */}
       <Route element={<PublicOnlyRoute />}>
@@ -41,5 +44,6 @@ export default function Router() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   )
 }

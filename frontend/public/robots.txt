@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /tasks
+Disallow: /profile
+Disallow: /billing
+Disallow: /today
+Disallow: /finance
+Disallow: /help
+Disallow: /reset-password/
+
+Sitemap: https://tasklytic-blue.vercel.app/sitemap.xml
